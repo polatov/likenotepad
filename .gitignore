@@ -1,0 +1,13 @@
+# Зависимости
+node_modules/
+
+# Сборочные артефакты Rust/Tauri
+src-tauri/target/
+src-tauri/gen/
+
+# Системный мусор macOS
+.DS_Store
+
+# Логи
+*.log
+.claude/
