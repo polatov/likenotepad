@@ -1,5 +1,5 @@
 use tauri::{
-    menu::{Menu, MenuItem, PredefinedMenuItem, Submenu},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
@@ -116,9 +116,12 @@ pub fn run() {
                 &select_all,
             ])?;
 
-            let theme_auto  = MenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"     } else { "Auto"  }, true, None::<&str>)?;
-            let theme_light = MenuItem::with_id(handle, "theme_light", if lang == "ru" { "Светлая"  } else { "Light" }, true, None::<&str>)?;
-            let theme_dark  = MenuItem::with_id(handle, "theme_dark",  if lang == "ru" { "Тёмная"   } else { "Dark"  }, true, None::<&str>)?;
+            let theme_auto  = CheckMenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"    } else { "Auto"  }, true, true,  None::<&str>)?;
+            let theme_light = CheckMenuItem::with_id(handle, "theme_light", if lang == "ru" { "Светлая" } else { "Light" }, true, false, None::<&str>)?;
+            let theme_dark  = CheckMenuItem::with_id(handle, "theme_dark",  if lang == "ru" { "Тёмная"  } else { "Dark"  }, true, false, None::<&str>)?;
+            let ta = theme_auto.clone();
+            let tl = theme_light.clone();
+            let td = theme_dark.clone();
 
             let view_label = if lang == "ru" { "Вид" } else { "View" };
             let view_menu = Submenu::with_items(handle, view_label, true, &[
@@ -131,7 +134,7 @@ pub fn run() {
             app.set_menu(menu)?;
 
             // Handle menu events
-            app.on_menu_event(|app, event| {
+            app.on_menu_event(move |app, event| {
                 match event.id().as_ref() {
                     "new" => { let _ = app.emit("menu-new", ()); }
                     "open" => { let _ = app.emit("menu-open", ()); }
@@ -143,9 +146,16 @@ pub fn run() {
                     "edit_copy"       => { let _ = app.emit("menu-edit", "copy"); }
                     "edit_paste"      => { let _ = app.emit("menu-edit", "paste"); }
                     "edit_select_all" => { let _ = app.emit("menu-edit", "select-all"); }
-                    "theme_auto"  => { let _ = app.emit("menu-theme", "auto"); }
-                    "theme_light" => { let _ = app.emit("menu-theme", "light"); }
-                    "theme_dark"  => { let _ = app.emit("menu-theme", "dark"); }
+                    "theme_auto" | "theme_light" | "theme_dark" => {
+                        let id = event.id().as_ref();
+                        let _ = ta.set_checked(id == "theme_auto");
+                        let _ = tl.set_checked(id == "theme_light");
+                        let _ = td.set_checked(id == "theme_dark");
+                        let payload = if id == "theme_light" { "light" }
+                                      else if id == "theme_dark" { "dark" }
+                                      else { "auto" };
+                        let _ = app.emit("menu-theme", payload);
+                    }
                     _ => {}
                 }
             });
