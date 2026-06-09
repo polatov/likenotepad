@@ -31,12 +31,11 @@ async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
     let path = rx.recv().map_err(|e| e.to_string())?;
     match path {
         Some(FilePath::Path(p)) => {
-            let content = std::fs::read_to_string(&p).map_err(|e| e.to_string())?;
-            let name = p
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
+            let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
+            let content = String::from_utf8(bytes).unwrap_or_else(|e| {
+                let (decoded, _, _) = encoding_rs::WINDOWS_1251.decode(e.as_bytes());
+                decoded.into_owned()
+            });
             Ok(Some((p.to_string_lossy().to_string(), content)))
         }
         _ => Ok(None),
