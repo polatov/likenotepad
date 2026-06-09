@@ -91,6 +91,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .setup(move |app| {
             let handle = app.handle();
+            let saved_theme = config::load(handle).theme;
 
             // Build native menu
             let about_label = if lang == "ru" { "О программе LikeNotepad.exe" } else { "About LikeNotepad.exe" };
@@ -147,9 +148,9 @@ pub fn run() {
                 &select_all,
             ])?;
 
-            let theme_auto  = CheckMenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"    } else { "Auto"  }, true, true,  None::<&str>)?;
-            let theme_light = CheckMenuItem::with_id(handle, "theme_light", if lang == "ru" { "Светлая" } else { "Light" }, true, false, None::<&str>)?;
-            let theme_dark  = CheckMenuItem::with_id(handle, "theme_dark",  if lang == "ru" { "Тёмная"  } else { "Dark"  }, true, false, None::<&str>)?;
+            let theme_auto  = CheckMenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"    } else { "Auto"  }, true, saved_theme == "auto",  None::<&str>)?;
+            let theme_light = CheckMenuItem::with_id(handle, "theme_light", if lang == "ru" { "Светлая" } else { "Light" }, true, saved_theme == "light", None::<&str>)?;
+            let theme_dark  = CheckMenuItem::with_id(handle, "theme_dark",  if lang == "ru" { "Тёмная"  } else { "Dark"  }, true, saved_theme == "dark",  None::<&str>)?;
             let ta = theme_auto.clone();
             let tl = theme_light.clone();
             let td = theme_dark.clone();
