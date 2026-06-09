@@ -1,5 +1,5 @@
 {
-  "productName": "Notepad",
+  "productName": "LikeNotepad.exe",
   "version": "0.1.0",
   "identifier": "me.polatov.notepad",
   "build": {
@@ -8,7 +8,7 @@
   "app": {
     "windows": [
       {
-        "title": "Notepad",
+        "title": "LikeNotepad.exe",
         "width": 800,
         "height": 600,
         "minWidth": 400,
