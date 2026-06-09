@@ -1,6 +1,8 @@
+mod config;
+
 use tauri::{
     menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
-    AppHandle, Emitter, Manager,
+    AppHandle, Emitter,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
 
@@ -45,6 +47,18 @@ async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
 #[tauri::command]
 async fn save_file(path: String, content: String) -> Result<(), String> {
     std::fs::write(&path, &content).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn get_theme(app: tauri::AppHandle) -> String {
+    config::load(&app).theme
+}
+
+#[tauri::command]
+fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.theme = theme;
+    config::save(&app, &cfg)
 }
 
 #[tauri::command]
@@ -184,6 +198,8 @@ pub fn run() {
             open_file,
             save_file,
             save_file_as,
+            get_theme,
+            set_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
