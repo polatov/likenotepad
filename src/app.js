@@ -2,6 +2,7 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 const { ask } = window.__TAURI__.dialog;
+const { getCurrentWindow } = window.__TAURI__.window;
 
 const editor = document.getElementById("editor");
 const statWords = document.getElementById("stat-words");
@@ -31,7 +32,7 @@ const T = {
   ru: {
     words: (n) => `${n} ${pluralRu(n, ["слово", "слова", "слов"])}`,
     chars: (n) => `${n} ${pluralRu(n, ["символ", "символа", "символов"])}`,
-    unsaved: "Без названия",
+    unsaved: "Без имени",
     confirmNew: "Отменить несохранённые изменения?",
     confirmNewTitle: "Новый",
     yes: "Да",
@@ -48,13 +49,15 @@ function t(key, arg) {
 let currentPath = null;
 let dirty = false;
 
-function setTitle() {
+function updateTitle() {
   const name = currentPath ? currentPath.split("/").pop() : t("unsaved");
-  document.title = dirty ? `${name} •` : name;
+  const title = `${dirty ? "• " : ""}${name} — LikeNotepad.exe`;
+  document.title = title;
+  getCurrentWindow().setTitle(title);
 }
 
-function markDirty() { dirty = true; setTitle(); }
-function markClean() { dirty = false; setTitle(); }
+function markDirty() { dirty = true; updateTitle(); }
+function markClean() { dirty = false; updateTitle(); }
 
 // --- Status bar ---
 function updateStatus() {
@@ -167,7 +170,7 @@ async function init() {
       }
     });
     updateStatus();
-    setTitle();
+    updateTitle();
   } catch (e) {
     console.error(e);
   }
