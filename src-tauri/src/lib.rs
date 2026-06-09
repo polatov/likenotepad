@@ -73,6 +73,7 @@ pub fn run() {
     let lang = system_lang();
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .setup(move |app| {
@@ -94,14 +95,14 @@ pub fn run() {
                 &save_as_item,
             ])?;
 
-            let undo = PredefinedMenuItem::undo(handle, if lang == "ru" { Some("Отменить") } else { Some("Undo") })?;
-            let redo = PredefinedMenuItem::redo(handle, if lang == "ru" { Some("Повторить") } else { Some("Redo") })?;
+            let undo       = MenuItem::with_id(handle, "edit_undo",       if lang == "ru" { "Отменить"     } else { "Undo"        }, true, Some("CmdOrCtrl+Z"))?;
+            let redo       = MenuItem::with_id(handle, "edit_redo",       if lang == "ru" { "Повторить"    } else { "Redo"        }, true, Some("CmdOrCtrl+Shift+Z"))?;
             let sep2 = PredefinedMenuItem::separator(handle)?;
-            let cut = PredefinedMenuItem::cut(handle, if lang == "ru" { Some("Вырезать") } else { Some("Cut") })?;
-            let copy = PredefinedMenuItem::copy(handle, if lang == "ru" { Some("Копировать") } else { Some("Copy") })?;
-            let paste = PredefinedMenuItem::paste(handle, if lang == "ru" { Some("Вставить") } else { Some("Paste") })?;
+            let cut        = MenuItem::with_id(handle, "edit_cut",        if lang == "ru" { "Вырезать"     } else { "Cut"         }, true, Some("CmdOrCtrl+X"))?;
+            let copy       = MenuItem::with_id(handle, "edit_copy",       if lang == "ru" { "Копировать"   } else { "Copy"        }, true, Some("CmdOrCtrl+C"))?;
+            let paste      = MenuItem::with_id(handle, "edit_paste",      if lang == "ru" { "Вставить"     } else { "Paste"       }, true, Some("CmdOrCtrl+V"))?;
             let sep3 = PredefinedMenuItem::separator(handle)?;
-            let select_all = PredefinedMenuItem::select_all(handle, if lang == "ru" { Some("Выделить всё") } else { Some("Select All") })?;
+            let select_all = MenuItem::with_id(handle, "edit_select_all", if lang == "ru" { "Выделить всё" } else { "Select All"  }, true, Some("CmdOrCtrl+A"))?;
 
             let edit_label = if lang == "ru" { "Правка" } else { "Edit" };
             let edit_menu = Submenu::with_items(handle, edit_label, true, &[
@@ -136,6 +137,12 @@ pub fn run() {
                     "open" => { let _ = app.emit("menu-open", ()); }
                     "save" => { let _ = app.emit("menu-save", ()); }
                     "save_as"    => { let _ = app.emit("menu-save-as", ()); }
+                    "edit_undo"       => { let _ = app.emit("menu-edit", "undo"); }
+                    "edit_redo"       => { let _ = app.emit("menu-edit", "redo"); }
+                    "edit_cut"        => { let _ = app.emit("menu-edit", "cut"); }
+                    "edit_copy"       => { let _ = app.emit("menu-edit", "copy"); }
+                    "edit_paste"      => { let _ = app.emit("menu-edit", "paste"); }
+                    "edit_select_all" => { let _ = app.emit("menu-edit", "select-all"); }
                     "theme_auto"  => { let _ = app.emit("menu-theme", "auto"); }
                     "theme_light" => { let _ = app.emit("menu-theme", "light"); }
                     "theme_dark"  => { let _ = app.emit("menu-theme", "dark"); }

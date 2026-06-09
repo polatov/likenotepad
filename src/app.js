@@ -24,6 +24,8 @@ const T = {
     unsaved: "Untitled",
     confirmNew: "Discard unsaved changes?",
     confirmNewTitle: "New",
+    yes: "Yes",
+    no: "No",
   },
   ru: {
     words: (n) => `${n} ${wordFormRu(n)}`,
@@ -31,6 +33,8 @@ const T = {
     unsaved: "Без названия",
     confirmNew: "Отменить несохранённые изменения?",
     confirmNewTitle: "Новый",
+    yes: "Да",
+    no: "Нет",
   },
 };
 
@@ -63,7 +67,7 @@ function updateStatus() {
 // --- File operations ---
 async function newFile() {
   if (dirty) {
-    const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), kind: "warning" });
+    const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), okLabel: t("yes"), cancelLabel: t("no"), kind: "warning" });
     if (!ok) return;
   }
   editor.value = "";
@@ -137,6 +141,30 @@ async function init() {
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
     await listen("menu-theme", (e) => setTheme(e.payload));
+    await listen("menu-edit", async (e) => {
+      switch (e.payload) {
+        case "undo":       document.execCommand("undo"); break;
+        case "redo":       document.execCommand("redo"); break;
+        case "cut":        document.execCommand("cut"); break;
+        case "copy":       document.execCommand("copy"); break;
+        case "select-all": document.execCommand("selectAll"); break;
+        case "paste": {
+          try {
+            const text = await invoke("plugin:clipboard-manager|read_text");
+            if (text) {
+              const s = editor.selectionStart, end = editor.selectionEnd;
+              editor.value = editor.value.slice(0, s) + text + editor.value.slice(end);
+              editor.selectionStart = editor.selectionEnd = s + text.length;
+              markDirty();
+              updateStatus();
+            }
+          } catch (err) {
+            console.error("paste:", err);
+          }
+          break;
+        }
+      }
+    });
     updateStatus();
     setTitle();
   } catch (e) {
