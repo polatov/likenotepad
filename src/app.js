@@ -69,17 +69,6 @@ function updateStatus() {
 }
 
 // --- File operations ---
-async function newFile() {
-  if (dirty) {
-    const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), okLabel: t("yes"), cancelLabel: t("no"), kind: "warning" });
-    if (!ok) return;
-  }
-  editor.value = "";
-  currentPath = null;
-  markClean();
-  updateStatus();
-}
-
 async function openFile() {
   const result = await invoke("open_file");
   if (!result) return;
@@ -106,8 +95,7 @@ async function saveFileAs() {
 // --- Keyboard shortcuts ---
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && !e.altKey) {
-    if (e.key === "n" || e.key === "N") { e.preventDefault(); newFile(); }
-    else if (e.key === "o" || e.key === "O") { e.preventDefault(); openFile(); }
+    if (e.key === "o" || e.key === "O") { e.preventDefault(); openFile(); }
     else if (e.key === "s" || e.key === "S") {
       e.preventDefault();
       if (e.shiftKey) saveFileAs(); else saveFile();
@@ -146,7 +134,6 @@ async function init() {
     } catch (e) {
       console.error("get_theme:", e);
     }
-    await listen("menu-new", newFile);
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);

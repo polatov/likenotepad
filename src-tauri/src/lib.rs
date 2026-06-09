@@ -1,10 +1,13 @@
 mod config;
 
+use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::{
     menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
+
+static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
 fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, payload: impl serde::Serialize + Clone) {
     for (_, win) in app.webview_windows() {
@@ -12,6 +15,34 @@ fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, pa
             let _ = win.emit(event, payload);
             return;
         }
+    }
+}
+
+fn new_window(app: &tauri::AppHandle) {
+    let n = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+    let label = format!("win-{}", n);
+
+    let (x, y) = app.webview_windows()
+        .into_values()
+        .find(|w| w.is_focused().unwrap_or(false))
+        .and_then(|w| {
+            let scale = w.scale_factor().ok()?;
+            let phys = w.outer_position().ok()?;
+            let log = phys.to_logical::<f64>(scale);
+            Some((log.x + 25.0, log.y + 25.0))
+        })
+        .unwrap_or((100.0, 100.0));
+
+    if let Err(e) = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App("index.html".into()))
+        .title("LikeNotepad.exe")
+        .inner_size(800.0, 600.0)
+        .min_inner_size(400.0, 300.0)
+        .position(x, y)
+        .resizable(true)
+        .decorations(true)
+        .build()
+    {
+        eprintln!("new_window error: {e}");
     }
 }
 
@@ -177,7 +208,7 @@ pub fn run() {
             // Handle menu events
             app.on_menu_event(move |app, event| {
                 match event.id().as_ref() {
-                    "new" => { emit_to_focused(app, "menu-new", ()); }
+                    "new" => { new_window(app); }
                     "open" => { emit_to_focused(app, "menu-open", ()); }
                     "save" => { emit_to_focused(app, "menu-save", ()); }
                     "save_as"    => { emit_to_focused(app, "menu-save-as", ()); }
