@@ -2,9 +2,18 @@ mod config;
 
 use tauri::{
     menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
-    AppHandle, Emitter,
+    AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
+
+fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, payload: impl serde::Serialize + Clone) {
+    for (_, win) in app.webview_windows() {
+        if win.is_focused().unwrap_or(false) {
+            let _ = win.emit(event, payload);
+            return;
+        }
+    }
+}
 
 // Detect system language: returns "ru" or "en"
 fn system_lang() -> &'static str {
@@ -168,16 +177,16 @@ pub fn run() {
             // Handle menu events
             app.on_menu_event(move |app, event| {
                 match event.id().as_ref() {
-                    "new" => { let _ = app.emit("menu-new", ()); }
-                    "open" => { let _ = app.emit("menu-open", ()); }
-                    "save" => { let _ = app.emit("menu-save", ()); }
-                    "save_as"    => { let _ = app.emit("menu-save-as", ()); }
-                    "edit_undo"       => { let _ = app.emit("menu-edit", "undo"); }
-                    "edit_redo"       => { let _ = app.emit("menu-edit", "redo"); }
-                    "edit_cut"        => { let _ = app.emit("menu-edit", "cut"); }
-                    "edit_copy"       => { let _ = app.emit("menu-edit", "copy"); }
-                    "edit_paste"      => { let _ = app.emit("menu-edit", "paste"); }
-                    "edit_select_all" => { let _ = app.emit("menu-edit", "select-all"); }
+                    "new" => { emit_to_focused(app, "menu-new", ()); }
+                    "open" => { emit_to_focused(app, "menu-open", ()); }
+                    "save" => { emit_to_focused(app, "menu-save", ()); }
+                    "save_as"    => { emit_to_focused(app, "menu-save-as", ()); }
+                    "edit_undo"       => { emit_to_focused(app, "menu-edit", "undo"); }
+                    "edit_redo"       => { emit_to_focused(app, "menu-edit", "redo"); }
+                    "edit_cut"        => { emit_to_focused(app, "menu-edit", "cut"); }
+                    "edit_copy"       => { emit_to_focused(app, "menu-edit", "copy"); }
+                    "edit_paste"      => { emit_to_focused(app, "menu-edit", "paste"); }
+                    "edit_select_all" => { emit_to_focused(app, "menu-edit", "select-all"); }
                     "theme_auto" | "theme_light" | "theme_dark" => {
                         let id = event.id().as_ref();
                         let _ = ta.set_checked(id == "theme_auto");
@@ -186,7 +195,7 @@ pub fn run() {
                         let payload = if id == "theme_light" { "light" }
                                       else if id == "theme_dark" { "dark" }
                                       else { "auto" };
-                        let _ = app.emit("menu-theme", payload);
+                        emit_to_focused(app, "menu-theme", payload);
                     }
                     _ => {}
                 }
