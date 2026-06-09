@@ -10,11 +10,12 @@ const statChars = document.getElementById("stat-chars");
 // --- i18n ---
 let lang = "en";
 
-function wordFormRu(n) {
-  const mod10 = n % 10, mod100 = n % 100;
-  if (mod10 === 1 && mod100 !== 11) return "слово";
-  if ([2, 3, 4].includes(mod10) && ![12, 13, 14].includes(mod100)) return "слова";
-  return "слов";
+function pluralRu(n, forms) {
+  const n100 = n % 100, n10 = n % 10;
+  if (n100 >= 11 && n100 <= 14) return forms[2];
+  if (n10 === 1) return forms[0];
+  if (n10 >= 2 && n10 <= 4) return forms[1];
+  return forms[2];
 }
 
 const T = {
@@ -28,8 +29,8 @@ const T = {
     no: "No",
   },
   ru: {
-    words: (n) => `${n} ${wordFormRu(n)}`,
-    chars: (n) => `${n} симв.`,
+    words: (n) => `${n} ${pluralRu(n, ["слово", "слова", "слов"])}`,
+    chars: (n) => `${n} ${pluralRu(n, ["символ", "символа", "символов"])}`,
     unsaved: "Без названия",
     confirmNew: "Отменить несохранённые изменения?",
     confirmNewTitle: "Новый",
