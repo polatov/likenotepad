@@ -23,12 +23,14 @@ const T = {
     chars: (n) => `${n} character${n !== 1 ? "s" : ""}`,
     unsaved: "Untitled",
     confirmNew: "Discard unsaved changes?",
+    confirmNewTitle: "New",
   },
   ru: {
     words: (n) => `${n} ${wordFormRu(n)}`,
     chars: (n) => `${n} симв.`,
     unsaved: "Без названия",
     confirmNew: "Отменить несохранённые изменения?",
+    confirmNewTitle: "Новый",
   },
 };
 
@@ -61,7 +63,7 @@ function updateStatus() {
 // --- File operations ---
 async function newFile() {
   if (dirty) {
-    const ok = await ask(t("confirmNew"), { title: lang === "ru" ? "Новый" : "New", kind: "warning" });
+    const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), kind: "warning" });
     if (!ok) return;
   }
   editor.value = "";
@@ -115,15 +117,26 @@ editor.addEventListener("keydown", (e) => {
   }
 });
 
+// --- Theme ---
+function setTheme(mode) {
+  if (mode === "light" || mode === "dark") {
+    document.documentElement.setAttribute("data-theme", mode);
+  } else {
+    document.documentElement.removeAttribute("data-theme");
+  }
+}
+
 // --- Init ---
 async function init() {
   editor.addEventListener("input", () => { markDirty(); updateStatus(); });
   try {
-    lang = await invoke("get_lang");
+    lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
+    console.log("[lang]", lang, navigator.language);
     await listen("menu-new", newFile);
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
+    await listen("menu-theme", (e) => setTheme(e.payload));
     updateStatus();
     setTitle();
   } catch (e) {

@@ -6,11 +6,8 @@ use tauri_plugin_dialog::{DialogExt, FilePath};
 
 // Detect system language: returns "ru" or "en"
 fn system_lang() -> &'static str {
-    // Read LANG or LC_ALL env var
-    let lang = std::env::var("LANG")
-        .or_else(|_| std::env::var("LC_ALL"))
-        .unwrap_or_default();
-    if lang.starts_with("ru") {
+    let locale = sys_locale::get_locale().unwrap_or_default();
+    if locale.to_lowercase().starts_with("ru") {
         "ru"
     } else {
         "en"
@@ -118,7 +115,18 @@ pub fn run() {
                 &select_all,
             ])?;
 
-            let menu = Menu::with_items(handle, &[&file_menu, &edit_menu])?;
+            let theme_auto  = MenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"     } else { "Auto"  }, true, None::<&str>)?;
+            let theme_light = MenuItem::with_id(handle, "theme_light", if lang == "ru" { "Светлая"  } else { "Light" }, true, None::<&str>)?;
+            let theme_dark  = MenuItem::with_id(handle, "theme_dark",  if lang == "ru" { "Тёмная"   } else { "Dark"  }, true, None::<&str>)?;
+
+            let view_label = if lang == "ru" { "Вид" } else { "View" };
+            let view_menu = Submenu::with_items(handle, view_label, true, &[
+                &theme_auto,
+                &theme_light,
+                &theme_dark,
+            ])?;
+
+            let menu = Menu::with_items(handle, &[&file_menu, &edit_menu, &view_menu])?;
             app.set_menu(menu)?;
 
             // Handle menu events
@@ -127,7 +135,10 @@ pub fn run() {
                     "new" => { let _ = app.emit("menu-new", ()); }
                     "open" => { let _ = app.emit("menu-open", ()); }
                     "save" => { let _ = app.emit("menu-save", ()); }
-                    "save_as" => { let _ = app.emit("menu-save-as", ()); }
+                    "save_as"    => { let _ = app.emit("menu-save-as", ()); }
+                    "theme_auto"  => { let _ = app.emit("menu-theme", "auto"); }
+                    "theme_light" => { let _ = app.emit("menu-theme", "light"); }
+                    "theme_dark"  => { let _ = app.emit("menu-theme", "dark"); }
                     _ => {}
                 }
             });
