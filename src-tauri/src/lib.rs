@@ -1,5 +1,5 @@
 use tauri::{
-    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
+    menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
     AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
@@ -80,6 +80,24 @@ pub fn run() {
             let handle = app.handle();
 
             // Build native menu
+            let about_label = if lang == "ru" { "О программе LikeNotepad.exe" } else { "About LikeNotepad.exe" };
+            let comments = if lang == "ru" {
+                "Тот самый Блокнот, но без Windows. Никаких облаков, подписок и ИИ. Просто текст"
+            } else {
+                "The same Notepad, but without Windows. No clouds, no subscriptions, no AI. Just text"
+            };
+            let about_item = PredefinedMenuItem::about(handle, Some(about_label), Some(AboutMetadata {
+                name:          Some("LikeNotepad.exe".to_string()),
+                version:       Some("0.1.0".to_string()),
+                authors:       Some(vec!["Timur Polatov".to_string()]),
+                copyright:     Some("Timur Polatov".to_string()),
+                website:       Some("https://polatov.me".to_string()),
+                website_label: Some("https://polatov.me".to_string()),
+                comments:      Some(comments.to_string()),
+                ..Default::default()
+            }))?;
+            let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item])?;
+
             let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Новый" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
             let open_item = MenuItem::with_id(handle, "open", if lang == "ru" { "Открыть..." } else { "Open..." }, true, Some("CmdOrCtrl+O"))?;
             let save_item = MenuItem::with_id(handle, "save", if lang == "ru" { "Сохранить" } else { "Save" }, true, Some("CmdOrCtrl+S"))?;
@@ -130,7 +148,7 @@ pub fn run() {
                 &theme_dark,
             ])?;
 
-            let menu = Menu::with_items(handle, &[&file_menu, &edit_menu, &view_menu])?;
+            let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &view_menu])?;
             app.set_menu(menu)?;
 
             // Handle menu events
