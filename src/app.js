@@ -140,11 +140,24 @@ async function init() {
   try {
     lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
     console.log("[lang]", lang, navigator.language);
+    try {
+      const savedTheme = await invoke("get_theme");
+      setTheme(savedTheme);
+    } catch (e) {
+      console.error("get_theme:", e);
+    }
     await listen("menu-new", newFile);
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
-    await listen("menu-theme", (e) => setTheme(e.payload));
+    await listen("menu-theme", async (e) => {
+      setTheme(e.payload);
+      try {
+        await invoke("set_theme", { theme: e.payload });
+      } catch (err) {
+        console.error("set_theme:", err);
+      }
+    });
     await listen("menu-edit", async (e) => {
       switch (e.payload) {
         case "undo":       document.execCommand("undo"); break;
