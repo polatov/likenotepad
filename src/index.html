@@ -72,6 +72,25 @@
     color: #ffffff;
   }
 
+  #editor-wrap {
+    position: relative;
+    flex: 1;
+    display: flex;
+  }
+
+  #find-overlay {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    overflow: hidden;
+  }
+
+  #find-highlight {
+    position: absolute;
+    background: rgba(255, 200, 0, 0.45);
+    border-radius: 2px;
+  }
+
   #findbar {
     flex-shrink: 0;
     display: flex;
@@ -84,10 +103,14 @@
     color: var(--text);
   }
   #findbar[hidden] { display: none; }
+  #find-field {
+    position: relative;
+    flex: 1;
+    display: flex;
+  }
   #find-input {
     flex: 1;
-    max-width: 320px;
-    padding: 3px 6px;
+    padding: 3px 56px 3px 6px;
     background: var(--editor-bg);
     color: var(--text);
     border: 1px solid var(--status-border);
@@ -96,8 +119,17 @@
     outline: none;
   }
   #find-input:focus { border-color: #4d90fe; }
+  #find-count {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    color: var(--status-text);
+    font-size: 11px;
+    pointer-events: none;
+    user-select: none;
+  }
   #find-case { display: flex; align-items: center; gap: 3px; color: var(--status-text); user-select: none; cursor: pointer; }
-  #find-count { color: var(--status-text); min-width: 60px; }
   #find-close { margin-left: auto; background: none; border: none; color: var(--status-text); cursor: pointer; font-size: 13px; padding: 2px 6px; }
   #find-close:hover { color: var(--text); }
 
@@ -119,12 +151,17 @@
 </head>
 <body>
 <div id="findbar" hidden>
-  <input id="find-input" type="text" placeholder="Найти" spellcheck="false" autocomplete="off">
+  <div id="find-field">
+    <input id="find-input" type="text" placeholder="Найти" spellcheck="false" autocomplete="off">
+    <span id="find-count"></span>
+  </div>
   <label id="find-case" title="Учитывать регистр"><input type="checkbox" id="find-case-cb"> Aa</label>
-  <span id="find-count"></span>
   <button id="find-close" title="Закрыть">✕</button>
 </div>
-<textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+<div id="editor-wrap">
+  <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+  <div id="find-overlay" hidden><span id="find-highlight"></span></div>
+</div>
 <div id="statusbar">
   <span id="stat-words"></span>
   <span id="stat-chars"></span>

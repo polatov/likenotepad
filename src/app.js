@@ -13,6 +13,8 @@ const findInput = document.getElementById("find-input");
 const findCaseCb = document.getElementById("find-case-cb");
 const findCount = document.getElementById("find-count");
 const findClose = document.getElementById("find-close");
+const findOverlay = document.getElementById("find-overlay");
+const findHighlight = document.getElementById("find-highlight");
 
 // --- i18n ---
 let lang = "en";
@@ -124,6 +126,72 @@ editor.addEventListener("keydown", (e) => {
   }
 });
 
+// --- Find highlight ---
+const tabSize = 4;
+let charW = 0;
+let lineHeight = 0;
+let editorPaddingTop = 0;
+let editorPaddingLeft = 0;
+let lastMatchStart = null;
+let lastMatchLen = 0;
+
+function measureFindMetrics() {
+  const canvas = document.createElement("canvas");
+  const ctx = canvas.getContext("2d");
+  ctx.font = "13px Menlo";
+  charW = ctx.measureText("M").width;
+  const cs = getComputedStyle(editor);
+  lineHeight = parseFloat(cs.lineHeight);
+  editorPaddingTop = parseFloat(cs.paddingTop);
+  editorPaddingLeft = parseFloat(cs.paddingLeft);
+}
+
+function advanceCol(str, startCol) {
+  let col = startCol;
+  for (const ch of str) {
+    if (ch === "\t") {
+      col = Math.floor(col / tabSize) * tabSize + tabSize;
+    } else {
+      col += 1;
+    }
+  }
+  return col;
+}
+
+function hideHighlight() {
+  findOverlay.hidden = true;
+  lastMatchStart = null;
+}
+
+function positionHighlight(matchStart, matchLen) {
+  lastMatchStart = matchStart;
+  lastMatchLen = matchLen;
+
+  const text = editor.value;
+  const before = text.slice(0, matchStart);
+  const lines = before.split("\n");
+  const lineNum = lines.length - 1;
+  const lineText = lines[lineNum];
+
+  const visualCol = advanceCol(lineText, 0);
+  const matchText = text.slice(matchStart, matchStart + matchLen);
+  const visualEndCol = advanceCol(matchText, visualCol);
+  const visualLen = visualEndCol - visualCol;
+
+  const x = editorPaddingLeft + visualCol * charW - editor.scrollLeft;
+  const y = editorPaddingTop + lineNum * lineHeight - editor.scrollTop;
+
+  findHighlight.style.left = `${x}px`;
+  findHighlight.style.top = `${y}px`;
+  findHighlight.style.width = `${visualLen * charW}px`;
+  findHighlight.style.height = `${lineHeight}px`;
+  findOverlay.hidden = false;
+}
+
+editor.addEventListener("scroll", () => {
+  if (lastMatchStart !== null) positionHighlight(lastMatchStart, lastMatchLen);
+});
+
 // --- Find ---
 function openFind() {
   findbar.hidden = false;
@@ -137,29 +205,56 @@ function openFind() {
 
 function closeFind() {
   findbar.hidden = true;
+  findCount.textContent = "";
+  hideHighlight();
   editor.focus();
 }
 
-function doFind(fromIndex) {
+function findAllMatches() {
   const term = findInput.value;
-  if (!term) {
-    findCount.textContent = "";
-    return;
-  }
+  if (!term) return [];
+
   const text = editor.value;
   const haystack = findCaseCb.checked ? text : text.toLowerCase();
   const needle = findCaseCb.checked ? term : term.toLowerCase();
 
-  let idx = haystack.indexOf(needle, fromIndex);
-  if (idx === -1) {
-    idx = haystack.indexOf(needle, 0);
+  const matches = [];
+  let pos = 0;
+  let idx;
+  while ((idx = haystack.indexOf(needle, pos)) !== -1) {
+    matches.push(idx);
+    pos = idx + needle.length;
   }
+  return matches;
+}
 
-  if (idx === -1) {
+function goToMatch(direction) {
+  const term = findInput.value;
+  const matches = findAllMatches();
+  if (matches.length === 0) {
+    findCount.textContent = "";
+    hideHighlight();
     return;
   }
 
+  const current = editor.selectionStart;
+  let pos;
+  if (direction === 1) {
+    pos = matches.findIndex((m) => m > current);
+    if (pos === -1) pos = 0;
+  } else {
+    pos = -1;
+    for (let i = matches.length - 1; i >= 0; i--) {
+      if (matches[i] < current) { pos = i; break; }
+    }
+    if (pos === -1) pos = matches.length - 1;
+  }
+  const idx = matches[pos];
+
   editor.setSelectionRange(idx, idx + term.length);
+  findInput.focus();
+  findCount.textContent = (pos + 1) + (lang === "ru" ? " из " : " of ") + matches.length;
+  positionHighlight(idx, term.length);
 }
 
 // --- Theme ---
@@ -173,11 +268,19 @@ function setTheme(mode) {
 
 // --- Init ---
 async function init() {
-  editor.addEventListener("input", () => { markDirty(); updateStatus(); });
+  measureFindMetrics();
+  editor.addEventListener("input", () => { markDirty(); updateStatus(); hideHighlight(); });
   findInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
-      doFind(editor.selectionEnd);
+      e.stopPropagation();
+      goToMatch(e.shiftKey ? -1 : 1);
+    }
+  });
+  findInput.addEventListener("input", () => {
+    if (!findInput.value) {
+      findCount.textContent = "";
+      hideHighlight();
     }
   });
   findClose.addEventListener("click", closeFind);
