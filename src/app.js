@@ -156,9 +156,11 @@ async function init() {
           try {
             const text = await invoke("plugin:clipboard-manager|read_text");
             if (text) {
-              const s = editor.selectionStart, end = editor.selectionEnd;
-              editor.value = editor.value.slice(0, s) + text + editor.value.slice(end);
-              editor.selectionStart = editor.selectionEnd = s + text.length;
+              editor.focus();
+              const ok = document.execCommand("insertText", false, text);
+              if (!ok) {
+                console.error("insertText не сработал");
+              }
               markDirty();
               updateStatus();
             }
