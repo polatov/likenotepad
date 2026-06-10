@@ -253,7 +253,7 @@ function goToMatch(direction) {
 
   editor.setSelectionRange(idx, idx + term.length);
   findInput.focus();
-  findCount.textContent = (pos + 1) + (lang === "ru" ? " из " : " of ") + matches.length;
+  findCount.textContent = (pos + 1) + (lang === "ru" ? " из " : " of ") + matches.length + (lang === "ru" ? " совпадений" : " matches");
   positionHighlight(idx, term.length);
 }
 
@@ -283,6 +283,8 @@ async function init() {
       hideHighlight();
     }
   });
+  document.getElementById("find-prev").addEventListener("click", () => goToMatch(-1));
+  document.getElementById("find-next").addEventListener("click", () => goToMatch(1));
   findClose.addEventListener("click", closeFind);
   try {
     lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";

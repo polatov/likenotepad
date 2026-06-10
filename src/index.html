@@ -130,6 +130,16 @@
     user-select: none;
   }
   #find-case { display: flex; align-items: center; gap: 3px; color: var(--status-text); user-select: none; cursor: pointer; }
+  #find-prev, #find-next {
+    background: none;
+    border: none;
+    color: var(--status-text);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 2px 5px;
+    line-height: 1;
+  }
+  #find-prev:hover, #find-next:hover { color: var(--text); }
   #find-close { margin-left: auto; background: none; border: none; color: var(--status-text); cursor: pointer; font-size: 13px; padding: 2px 6px; }
   #find-close:hover { color: var(--text); }
 
@@ -155,6 +165,8 @@
     <input id="find-input" type="text" placeholder="Найти" spellcheck="false" autocomplete="off">
     <span id="find-count"></span>
   </div>
+  <button id="find-prev" title="Предыдущее (Shift+Enter)">‹</button>
+  <button id="find-next" title="Следующее (Enter)">›</button>
   <label id="find-case" title="Учитывать регистр"><input type="checkbox" id="find-case-cb"> Aa</label>
   <button id="find-close" title="Закрыть">✕</button>
 </div>
