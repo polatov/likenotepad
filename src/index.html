@@ -72,6 +72,35 @@
     color: #ffffff;
   }
 
+  #findbar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--status-bg);
+    border-bottom: 1px solid var(--status-border);
+    font-size: 12px;
+    color: var(--text);
+  }
+  #findbar[hidden] { display: none; }
+  #find-input {
+    flex: 1;
+    max-width: 320px;
+    padding: 3px 6px;
+    background: var(--editor-bg);
+    color: var(--text);
+    border: 1px solid var(--status-border);
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+  }
+  #find-input:focus { border-color: #4d90fe; }
+  #find-case { display: flex; align-items: center; gap: 3px; color: var(--status-text); user-select: none; cursor: pointer; }
+  #find-count { color: var(--status-text); min-width: 60px; }
+  #find-close { margin-left: auto; background: none; border: none; color: var(--status-text); cursor: pointer; font-size: 13px; padding: 2px 6px; }
+  #find-close:hover { color: var(--text); }
+
   #statusbar {
     flex-shrink: 0;
     height: 22px;
@@ -89,6 +118,12 @@
 </style>
 </head>
 <body>
+<div id="findbar" hidden>
+  <input id="find-input" type="text" placeholder="Найти" spellcheck="false" autocomplete="off">
+  <label id="find-case" title="Учитывать регистр"><input type="checkbox" id="find-case-cb"> Aa</label>
+  <span id="find-count"></span>
+  <button id="find-close" title="Закрыть">✕</button>
+</div>
 <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
 <div id="statusbar">
   <span id="stat-words"></span>

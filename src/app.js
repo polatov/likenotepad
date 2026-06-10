@@ -8,6 +8,12 @@ const editor = document.getElementById("editor");
 const statWords = document.getElementById("stat-words");
 const statChars = document.getElementById("stat-chars");
 
+const findbar = document.getElementById("findbar");
+const findInput = document.getElementById("find-input");
+const findCaseCb = document.getElementById("find-case-cb");
+const findCount = document.getElementById("find-count");
+const findClose = document.getElementById("find-close");
+
 // --- i18n ---
 let lang = "en";
 
@@ -100,6 +106,11 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       if (e.shiftKey) saveFileAs(); else saveFile();
     }
+    else if (e.key === "f" || e.key === "F") { e.preventDefault(); openFind(); }
+  }
+  else if (e.key === "Escape" && !findbar.hidden) {
+    e.preventDefault();
+    closeFind();
   }
 });
 
@@ -113,6 +124,44 @@ editor.addEventListener("keydown", (e) => {
   }
 });
 
+// --- Find ---
+function openFind() {
+  findbar.hidden = false;
+  const selected = editor.value.slice(editor.selectionStart, editor.selectionEnd);
+  if (selected) {
+    findInput.value = selected;
+  }
+  findInput.focus();
+  findInput.select();
+}
+
+function closeFind() {
+  findbar.hidden = true;
+  editor.focus();
+}
+
+function doFind(fromIndex) {
+  const term = findInput.value;
+  if (!term) {
+    findCount.textContent = "";
+    return;
+  }
+  const text = editor.value;
+  const haystack = findCaseCb.checked ? text : text.toLowerCase();
+  const needle = findCaseCb.checked ? term : term.toLowerCase();
+
+  let idx = haystack.indexOf(needle, fromIndex);
+  if (idx === -1) {
+    idx = haystack.indexOf(needle, 0);
+  }
+
+  if (idx === -1) {
+    return;
+  }
+
+  editor.setSelectionRange(idx, idx + term.length);
+}
+
 // --- Theme ---
 function setTheme(mode) {
   if (mode === "light" || mode === "dark") {
@@ -125,6 +174,13 @@ function setTheme(mode) {
 // --- Init ---
 async function init() {
   editor.addEventListener("input", () => { markDirty(); updateStatus(); });
+  findInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      doFind(editor.selectionEnd);
+    }
+  });
+  findClose.addEventListener("click", closeFind);
   try {
     lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
     console.log("[lang]", lang, navigator.language);
