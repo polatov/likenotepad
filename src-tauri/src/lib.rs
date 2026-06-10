@@ -150,7 +150,10 @@ pub fn run() {
                 comments:      Some(comments.to_string()),
                 ..Default::default()
             }))?;
-            let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item])?;
+            let sep_app = PredefinedMenuItem::separator(handle)?;
+            let quit_label = if lang == "ru" { "Завершить LikeNotepad.exe" } else { "Quit LikeNotepad.exe" };
+            let quit_item = PredefinedMenuItem::quit(handle, Some(quit_label))?;
+            let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item, &sep_app, &quit_item])?;
 
             let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Новый" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
             let open_item = MenuItem::with_id(handle, "open", if lang == "ru" { "Открыть..." } else { "Open..." }, true, Some("CmdOrCtrl+O"))?;
