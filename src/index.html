@@ -94,8 +94,9 @@
   #findbar {
     flex-shrink: 0;
     display: flex;
-    align-items: center;
-    gap: 8px;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 6px;
     padding: 6px 12px;
     background: var(--status-bg);
     border-bottom: 1px solid var(--status-border);
@@ -103,7 +104,34 @@
     color: var(--text);
   }
   #findbar[hidden] { display: none; }
-  #find-field {
+  #findbar-row1, #findbar-row2 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #findbar-row2[hidden] { display: none; }
+  #replace-input {
+    flex: 1;
+    padding: 3px 6px;
+    background: var(--editor-bg);
+    color: var(--text);
+    border: 1px solid var(--status-border);
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+  }
+  #replace-input:focus { border-color: #4d90fe; }
+  #replace-one, #replace-all {
+    background: none;
+    border: 1px solid var(--status-border);
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 8px;
+  }
+  #replace-one:hover, #replace-all:hover { background: var(--status-border); }
+  #find-field, #replace-field {
     position: relative;
     flex: 1;
     display: flex;
@@ -129,7 +157,27 @@
     pointer-events: none;
     user-select: none;
   }
-  #find-case { display: flex; align-items: center; gap: 3px; color: var(--status-text); user-select: none; cursor: pointer; }
+  #find-actions, #replace-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+  }
+  #find-case {
+    background: none;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--status-text);
+    cursor: pointer;
+    font-size: 12px;
+    padding: 2px 6px;
+    line-height: 1;
+  }
+  #find-case:hover { color: var(--text); }
+  #find-case.active {
+    border-color: #4d90fe;
+    color: var(--text);
+  }
   #find-prev, #find-next {
     background: none;
     border: none;
@@ -140,7 +188,7 @@
     line-height: 1;
   }
   #find-prev:hover, #find-next:hover { color: var(--text); }
-  #find-close { margin-left: auto; background: none; border: none; color: var(--status-text); cursor: pointer; font-size: 13px; padding: 2px 6px; }
+  #find-close { background: none; border: none; color: var(--status-text); cursor: pointer; font-size: 13px; padding: 2px 6px; }
   #find-close:hover { color: var(--text); }
 
   #statusbar {
@@ -161,14 +209,27 @@
 </head>
 <body>
 <div id="findbar" hidden>
-  <div id="find-field">
-    <input id="find-input" type="text" placeholder="Найти" spellcheck="false" autocomplete="off">
-    <span id="find-count"></span>
+  <div id="findbar-row1">
+    <div id="find-field">
+      <input id="find-input" type="text" placeholder="Найти" spellcheck="false" autocomplete="off">
+      <span id="find-count"></span>
+    </div>
+    <div id="find-actions">
+      <button id="find-prev" title="Предыдущее (Shift+Enter)">‹</button>
+      <button id="find-next" title="Следующее (Enter)">›</button>
+      <button id="find-case" title="Учитывать регистр">Aa</button>
+      <button id="find-close" title="Закрыть">✕</button>
+    </div>
   </div>
-  <button id="find-prev" title="Предыдущее (Shift+Enter)">‹</button>
-  <button id="find-next" title="Следующее (Enter)">›</button>
-  <label id="find-case" title="Учитывать регистр"><input type="checkbox" id="find-case-cb"> Aa</label>
-  <button id="find-close" title="Закрыть">✕</button>
+  <div id="findbar-row2" hidden>
+    <div id="replace-field">
+      <input id="replace-input" type="text" placeholder="Заменить на" spellcheck="false" autocomplete="off">
+    </div>
+    <div id="replace-actions">
+      <button id="replace-one">Заменить</button>
+      <button id="replace-all">Заменить всё</button>
+    </div>
+  </div>
 </div>
 <div id="editor-wrap">
   <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>

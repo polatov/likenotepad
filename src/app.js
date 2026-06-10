@@ -10,7 +10,6 @@ const statChars = document.getElementById("stat-chars");
 
 const findbar = document.getElementById("findbar");
 const findInput = document.getElementById("find-input");
-const findCaseCb = document.getElementById("find-case-cb");
 const findCount = document.getElementById("find-count");
 const findClose = document.getElementById("find-close");
 const findOverlay = document.getElementById("find-overlay");
@@ -108,7 +107,11 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       if (e.shiftKey) saveFileAs(); else saveFile();
     }
-    else if (e.key === "f" || e.key === "F") { e.preventDefault(); openFind(); }
+    else if (e.key === "f" || e.key === "F") { e.preventDefault(); openFind("find"); }
+  }
+  else if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "f" || e.key === "F")) {
+    e.preventDefault();
+    openFind("replace");
   }
   else if (e.key === "Escape" && !findbar.hidden) {
     e.preventDefault();
@@ -134,6 +137,8 @@ let editorPaddingTop = 0;
 let editorPaddingLeft = 0;
 let lastMatchStart = null;
 let lastMatchLen = 0;
+let replaceMode = false;
+let matchCase = false;
 
 function measureFindMetrics() {
   const canvas = document.createElement("canvas");
@@ -193,8 +198,10 @@ editor.addEventListener("scroll", () => {
 });
 
 // --- Find ---
-function openFind() {
+function openFind(mode = "find") {
+  replaceMode = (mode === "replace");
   findbar.hidden = false;
+  document.getElementById("findbar-row2").hidden = !replaceMode;
   const selected = editor.value.slice(editor.selectionStart, editor.selectionEnd);
   if (selected) {
     findInput.value = selected;
@@ -207,6 +214,8 @@ function closeFind() {
   findbar.hidden = true;
   findCount.textContent = "";
   hideHighlight();
+  replaceMode = false;
+  document.getElementById("findbar-row2").hidden = true;
   editor.focus();
 }
 
@@ -215,8 +224,8 @@ function findAllMatches() {
   if (!term) return [];
 
   const text = editor.value;
-  const haystack = findCaseCb.checked ? text : text.toLowerCase();
-  const needle = findCaseCb.checked ? term : term.toLowerCase();
+  const haystack = matchCase ? text : text.toLowerCase();
+  const needle = matchCase ? term : term.toLowerCase();
 
   const matches = [];
   let pos = 0;
@@ -257,6 +266,42 @@ function goToMatch(direction) {
   positionHighlight(idx, term.length);
 }
 
+function doReplace() {
+  const term = findInput.value;
+  const replacement = document.getElementById("replace-input").value;
+  if (!term) return;
+  const matches = findAllMatches();
+  if (matches.length === 0) return;
+  // найти текущее совпадение (ближайшее к selectionStart)
+  const current = editor.selectionStart;
+  let pos = matches.findIndex(m => m === current);
+  if (pos === -1) pos = matches.findIndex(m => m >= current);
+  if (pos === -1) pos = 0;
+  const idx = matches[pos];
+  editor.focus();
+  editor.setSelectionRange(idx, idx + term.length);
+  document.execCommand("insertText", false, replacement);
+  findInput.focus();
+  // перейти к следующему совпадению
+  goToMatch(1);
+}
+
+function doReplaceAll() {
+  const term = findInput.value;
+  const replacement = document.getElementById("replace-input").value;
+  if (!term) return;
+  const matches = findAllMatches();
+  if (matches.length === 0) return;
+  editor.focus();
+  for (let i = matches.length - 1; i >= 0; i--) {
+    editor.setSelectionRange(matches[i], matches[i] + term.length);
+    document.execCommand("insertText", false, replacement);
+  }
+  findInput.focus();
+  hideHighlight();
+  findCount.textContent = "";
+}
+
 // --- Theme ---
 function setTheme(mode) {
   if (mode === "light" || mode === "dark") {
@@ -285,6 +330,12 @@ async function init() {
   });
   document.getElementById("find-prev").addEventListener("click", () => goToMatch(-1));
   document.getElementById("find-next").addEventListener("click", () => goToMatch(1));
+  document.getElementById("find-case").addEventListener("click", (e) => {
+    matchCase = !matchCase;
+    e.target.classList.toggle("active", matchCase);
+  });
+  document.getElementById("replace-one").addEventListener("click", doReplace);
+  document.getElementById("replace-all").addEventListener("click", doReplaceAll);
   findClose.addEventListener("click", closeFind);
   try {
     lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
@@ -313,6 +364,7 @@ async function init() {
         case "cut":        document.execCommand("cut"); break;
         case "copy":       document.execCommand("copy"); break;
         case "select-all": document.execCommand("selectAll"); break;
+        case "replace": openFind("replace"); break;
         case "paste": {
           try {
             const text = await invoke("plugin:clipboard-manager|read_text");

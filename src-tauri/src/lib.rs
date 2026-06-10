@@ -178,6 +178,7 @@ pub fn run() {
             let paste      = MenuItem::with_id(handle, "edit_paste",      if lang == "ru" { "Вставить"     } else { "Paste"       }, true, Some("CmdOrCtrl+V"))?;
             let sep3 = PredefinedMenuItem::separator(handle)?;
             let select_all = MenuItem::with_id(handle, "edit_select_all", if lang == "ru" { "Выделить всё" } else { "Select All"  }, true, Some("CmdOrCtrl+A"))?;
+            let replace_item = MenuItem::with_id(handle, "edit_replace", if lang == "ru" { "Заменить..." } else { "Replace..." }, true, Some("CmdOrCtrl+Alt+F"))?;
 
             let edit_label = if lang == "ru" { "Правка" } else { "Edit" };
             let edit_menu = Submenu::with_items(handle, edit_label, true, &[
@@ -189,6 +190,7 @@ pub fn run() {
                 &paste,
                 &sep3,
                 &select_all,
+                &replace_item,
             ])?;
 
             let theme_auto  = CheckMenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"    } else { "Auto"  }, true, saved_theme == "auto",  None::<&str>)?;
@@ -221,6 +223,7 @@ pub fn run() {
                     "edit_copy"       => { emit_to_focused(app, "menu-edit", "copy"); }
                     "edit_paste"      => { emit_to_focused(app, "menu-edit", "paste"); }
                     "edit_select_all" => { emit_to_focused(app, "menu-edit", "select-all"); }
+                    "edit_replace" => { emit_to_focused(app, "menu-edit", "replace"); }
                     "theme_auto" | "theme_light" | "theme_dark" => {
                         let id = event.id().as_ref();
                         let _ = ta.set_checked(id == "theme_auto");
