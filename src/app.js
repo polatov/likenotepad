@@ -77,6 +77,10 @@ function updateStatus() {
 
 // --- File operations ---
 async function openFile() {
+  if (dirty) {
+    const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), okLabel: t("yes"), cancelLabel: t("no"), kind: "warning" });
+    if (!ok) return;
+  }
   const result = await invoke("open_file");
   if (!result) return;
   const [path, content] = result;
