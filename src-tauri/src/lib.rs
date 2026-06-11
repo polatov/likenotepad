@@ -77,17 +77,22 @@ async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
     let path = rx.recv().map_err(|e| e.to_string())?;
     match path {
         Some(FilePath::Path(p)) => {
-            let bytes = std::fs::read(&p).map_err(|e| e.to_string())?;
-            let content = String::from_utf8(bytes).unwrap_or_else(|e| {
-                let (decoded, _, _) = encoding_rs::WINDOWS_1251.decode(e.as_bytes());
-                decoded.into_owned()
-            });
             let path_str = p.to_string_lossy().to_string();
+            let content = read_file_content(&path_str)?;
             add_recent(&app, &path_str);
             Ok(Some((path_str, content)))
         }
         _ => Ok(None),
     }
+}
+
+fn read_file_content(path: &str) -> Result<String, String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let content = String::from_utf8(bytes).unwrap_or_else(|e| {
+        let (decoded, _, _) = encoding_rs::WINDOWS_1251.decode(e.as_bytes());
+        decoded.into_owned()
+    });
+    Ok(content)
 }
 
 #[tauri::command]
@@ -300,6 +305,48 @@ pub fn run() {
                     "edit_paste"      => { emit_to_focused(app, "menu-edit", "paste"); }
                     "edit_select_all" => { emit_to_focused(app, "menu-edit", "select-all"); }
                     "edit_replace" => { emit_to_focused(app, "menu-edit", "replace"); }
+                    id if id.starts_with("recent-") => {
+                        if let Ok(index) = id["recent-".len()..].parse::<usize>() {
+                            let path_opt = {
+                                let state = app.state::<RecentFilesState>();
+                                let guard = state.0.lock().unwrap();
+                                guard.get(index).cloned()
+                            };
+                            if let Some(path) = path_opt {
+                                if std::path::Path::new(&path).exists() {
+                                    match read_file_content(&path) {
+                                        Ok(content) => {
+                                            emit_to_focused(app, "menu-open-recent", (path.clone(), content));
+                                            add_recent(app, &path); // поднять наверх списка
+                                        }
+                                        Err(_) => {}
+                                    }
+                                } else {
+                                    // файл удалён — убрать из списка и перестроить меню
+                                    {
+                                        let state = app.state::<RecentFilesState>();
+                                        let mut guard = state.0.lock().unwrap();
+                                        guard.retain(|p| p != &path);
+                                    }
+                                    let mut cfg = config::load(app);
+                                    cfg.recent_files = app.state::<RecentFilesState>().0.lock().unwrap().clone();
+                                    let _ = config::save(app, &cfg);
+                                    rebuild_recent_menu(app);
+                                }
+                            }
+                        }
+                    }
+                    "clear_recent" => {
+                        {
+                            let state = app.state::<RecentFilesState>();
+                            let mut guard = state.0.lock().unwrap();
+                            guard.clear();
+                        }
+                        let mut cfg = config::load(app);
+                        cfg.recent_files.clear();
+                        let _ = config::save(app, &cfg);
+                        rebuild_recent_menu(app);
+                    }
                     "theme_auto" | "theme_light" | "theme_dark" => {
                         let id = event.id().as_ref();
                         let _ = ta.set_checked(id == "theme_auto");

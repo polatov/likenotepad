@@ -353,6 +353,17 @@ async function init() {
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
+    await listen("menu-open-recent", async (e) => {
+      const [path, content] = e.payload;
+      if (dirty) {
+        const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), okLabel: t("yes"), cancelLabel: t("no"), kind: "warning" });
+        if (!ok) return;
+      }
+      editor.value = content;
+      currentPath = path;
+      markClean();
+      updateStatus();
+    });
     await listen("menu-theme", async (e) => {
       setTheme(e.payload);
       try {
