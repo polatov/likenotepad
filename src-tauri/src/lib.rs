@@ -2,7 +2,7 @@ mod config;
 
 use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::{
-    menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu},
+    menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID},
     AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
@@ -287,7 +287,10 @@ pub fn run() {
                 &theme_dark,
             ])?;
 
-            let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &view_menu])?;
+            let help_label = if lang == "ru" { "Помощь" } else { "Help" };
+            let help_menu = Submenu::with_id_and_items(handle, HELP_SUBMENU_ID, help_label, true, &[])?;
+
+            let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &view_menu, &help_menu])?;
             app.set_menu(menu)?;
             rebuild_recent_menu(handle);
 
