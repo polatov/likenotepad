@@ -113,13 +113,13 @@ fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-async fn save_file_as(app: AppHandle, content: String) -> Result<Option<String>, String> {
+async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -> Result<Option<String>, String> {
     let last_dir = config::load(&app).last_dir;
     let (tx, rx) = std::sync::mpsc::channel();
     let mut builder = app.dialog()
         .file()
         .add_filter("Text", &["txt"])
-        .set_file_name("Untitled.txt");
+        .set_file_name(&suggested_name);
     if let Some(dir) = &last_dir {
         builder = builder.set_directory(dir);
     }

@@ -97,7 +97,8 @@ async function saveFile() {
 }
 
 async function saveFileAs() {
-  const result = await invoke("save_file_as", { content: editor.value });
+  const suggestedName = currentPath ? currentPath.split("/").pop() : (lang === "ru" ? "Без имени.txt" : "Untitled.txt");
+  const result = await invoke("save_file_as", { content: editor.value, suggestedName });
   if (!result) return;
   currentPath = result;
   markClean();
