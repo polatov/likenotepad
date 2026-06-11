@@ -63,13 +63,17 @@ fn get_lang() -> String {
 
 #[tauri::command]
 async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
+    let last_dir = config::load(&app).last_dir;
     let (tx, rx) = std::sync::mpsc::channel();
-    app.dialog()
+    let mut builder = app.dialog()
         .file()
-        .add_filter("Text", &["txt", "md", "log", "csv"])
-        .pick_file(move |path| {
-            let _ = tx.send(path);
-        });
+        .add_filter("Text", &["txt", "md", "log", "csv"]);
+    if let Some(dir) = &last_dir {
+        builder = builder.set_directory(dir);
+    }
+    builder.pick_file(move |path| {
+        let _ = tx.send(path);
+    });
     let path = rx.recv().map_err(|e| e.to_string())?;
     match path {
         Some(FilePath::Path(p)) => {
@@ -78,7 +82,9 @@ async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
                 let (decoded, _, _) = encoding_rs::WINDOWS_1251.decode(e.as_bytes());
                 decoded.into_owned()
             });
-            Ok(Some((p.to_string_lossy().to_string(), content)))
+            let path_str = p.to_string_lossy().to_string();
+            add_recent(&app, &path_str);
+            Ok(Some((path_str, content)))
         }
         _ => Ok(None),
     }
@@ -103,19 +109,24 @@ fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
 
 #[tauri::command]
 async fn save_file_as(app: AppHandle, content: String) -> Result<Option<String>, String> {
+    let last_dir = config::load(&app).last_dir;
     let (tx, rx) = std::sync::mpsc::channel();
-    app.dialog()
+    let mut builder = app.dialog()
         .file()
         .add_filter("Text", &["txt"])
-        .set_file_name("Untitled.txt")
-        .save_file(move |path| {
-            let _ = tx.send(path);
-        });
+        .set_file_name("Untitled.txt");
+    if let Some(dir) = &last_dir {
+        builder = builder.set_directory(dir);
+    }
+    builder.save_file(move |path| {
+        let _ = tx.send(path);
+    });
     let path = rx.recv().map_err(|e| e.to_string())?;
     match path {
         Some(FilePath::Path(p)) => {
             let path_str = p.to_string_lossy().to_string();
             std::fs::write(&p, &content).map_err(|e| e.to_string())?;
+            add_recent(&app, &path_str);
             Ok(Some(path_str))
         }
         _ => Ok(None),
@@ -124,6 +135,28 @@ async fn save_file_as(app: AppHandle, content: String) -> Result<Option<String>,
 
 struct RecentFilesState(std::sync::Mutex<Vec<String>>);
 struct RecentMenuState(std::sync::Mutex<Option<tauri::menu::Submenu<tauri::Wry>>>);
+
+fn add_recent(app: &tauri::AppHandle, path: &str) {
+    // обновить state: убрать дубликат, вставить в начало, обрезать до 10
+    {
+        let state = app.state::<RecentFilesState>();
+        let mut guard = state.0.lock().unwrap();
+        guard.retain(|p| p != path);
+        guard.insert(0, path.to_string());
+        guard.truncate(10);
+    }
+    // обновить last_dir = папка файла
+    let last_dir = std::path::Path::new(path)
+        .parent()
+        .map(|p| p.to_string_lossy().to_string());
+    // записать в конфиг (recent + last_dir)
+    let mut cfg = config::load(app);
+    cfg.recent_files = app.state::<RecentFilesState>().0.lock().unwrap().clone();
+    if last_dir.is_some() { cfg.last_dir = last_dir; }
+    let _ = config::save(app, &cfg);
+    // перестроить меню
+    rebuild_recent_menu(app);
+}
 
 fn rebuild_recent_menu(app: &tauri::AppHandle) {
     let recent: Vec<String> = {
