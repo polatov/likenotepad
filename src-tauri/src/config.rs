@@ -5,12 +5,16 @@ use tauri::Manager;
 #[serde(default)]
 pub struct Config {
     pub theme: String,
+    pub recent_files: Vec<String>,
+    pub last_dir: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
             theme: "auto".to_string(),
+            recent_files: Vec::new(),
+            last_dir: None,
         }
     }
 }

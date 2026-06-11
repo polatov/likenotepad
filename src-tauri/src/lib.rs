@@ -122,6 +122,38 @@ async fn save_file_as(app: AppHandle, content: String) -> Result<Option<String>,
     }
 }
 
+struct RecentFilesState(std::sync::Mutex<Vec<String>>);
+struct RecentMenuState(std::sync::Mutex<Option<tauri::menu::Submenu<tauri::Wry>>>);
+
+fn rebuild_recent_menu(app: &tauri::AppHandle) {
+    let recent: Vec<String> = {
+        let state = app.state::<RecentFilesState>();
+        let guard = state.0.lock().unwrap();
+        guard.clone()
+    };
+    let menu_state = app.state::<RecentMenuState>();
+    let guard = menu_state.0.lock().unwrap();
+    let submenu = match guard.as_ref() { Some(s) => s, None => return };
+    // очистить
+    while let Ok(Some(_)) = submenu.remove_at(0) {}
+    let lang = system_lang();
+    if recent.is_empty() {
+        let empty = MenuItem::with_id(app, "recent_empty", if lang == "ru" { "Нет недавних файлов" } else { "No Recent Files" }, false, None::<&str>).unwrap();
+        let _ = submenu.append(&empty);
+        return;
+    }
+    // пункты recent-0..N с именем файла
+    for (i, path) in recent.iter().enumerate() {
+        let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
+        let item = MenuItem::with_id(app, format!("recent-{}", i), name, true, None::<&str>).unwrap();
+        let _ = submenu.append(&item);
+    }
+    let sep = PredefinedMenuItem::separator(app).unwrap();
+    let _ = submenu.append(&sep);
+    let clear = MenuItem::with_id(app, "clear_recent", if lang == "ru" { "Очистить меню" } else { "Clear Menu" }, true, None::<&str>).unwrap();
+    let _ = submenu.append(&clear);
+}
+
 pub fn run() {
     let lang = system_lang();
 
@@ -129,9 +161,15 @@ pub fn run() {
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
+        .manage(RecentFilesState(std::sync::Mutex::new(Vec::new())))
+        .manage(RecentMenuState(std::sync::Mutex::new(None)))
         .setup(move |app| {
             let handle = app.handle();
-            let saved_theme = config::load(handle).theme;
+            let mut cfg = config::load(handle);
+            let saved_theme = cfg.theme.clone();
+            cfg.recent_files.retain(|p| std::path::Path::new(p).exists());
+            let _ = config::save(handle, &cfg);
+            *app.state::<RecentFilesState>().0.lock().unwrap() = cfg.recent_files.clone();
 
             // Build native menu
             let about_label = if lang == "ru" { "О программе LikeNotepad.exe" } else { "About LikeNotepad.exe" };
@@ -157,6 +195,8 @@ pub fn run() {
 
             let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Новый" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
             let open_item = MenuItem::with_id(handle, "open", if lang == "ru" { "Открыть..." } else { "Open..." }, true, Some("CmdOrCtrl+O"))?;
+            let recent_label = if lang == "ru" { "Открыть недавние" } else { "Open Recent" };
+            let recent_submenu = Submenu::with_id(handle, "recent_submenu", recent_label, true)?;
             let save_item = MenuItem::with_id(handle, "save", if lang == "ru" { "Сохранить" } else { "Save" }, true, Some("CmdOrCtrl+S"))?;
             let save_as_item = MenuItem::with_id(handle, "save_as", if lang == "ru" { "Сохранить как..." } else { "Save As..." }, true, Some("CmdOrCtrl+Shift+S"))?;
             let sep = PredefinedMenuItem::separator(handle)?;
@@ -165,10 +205,12 @@ pub fn run() {
             let file_menu = Submenu::with_items(handle, file_label, true, &[
                 &new_item,
                 &open_item,
+                &recent_submenu,
                 &sep,
                 &save_item,
                 &save_as_item,
             ])?;
+            app.state::<RecentMenuState>().0.lock().unwrap().replace(recent_submenu.clone());
 
             let undo       = MenuItem::with_id(handle, "edit_undo",       if lang == "ru" { "Отменить"     } else { "Undo"        }, true, Some("CmdOrCtrl+Z"))?;
             let redo       = MenuItem::with_id(handle, "edit_redo",       if lang == "ru" { "Повторить"    } else { "Redo"        }, true, Some("CmdOrCtrl+Shift+Z"))?;
@@ -209,6 +251,7 @@ pub fn run() {
 
             let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &view_menu])?;
             app.set_menu(menu)?;
+            rebuild_recent_menu(handle);
 
             // Handle menu events
             app.on_menu_event(move |app, event| {
