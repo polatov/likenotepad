@@ -197,13 +197,18 @@
     padding: 0 12px;
     display: flex;
     align-items: center;
-    justify-content: flex-end;
+    justify-content: flex-start;
     gap: 16px;
     background: var(--status-bg);
     border-top: 1px solid var(--status-border);
     color: var(--status-text);
     font-size: 11px;
     user-select: none;
+  }
+  #stat-spacer { flex: 1; }
+  #stat-right {
+    display: flex;
+    gap: 12px;
   }
 </style>
 </head>
@@ -236,8 +241,12 @@
   <div id="find-overlay" hidden><span id="find-highlight"></span></div>
 </div>
 <div id="statusbar">
-  <span id="stat-words"></span>
-  <span id="stat-chars"></span>
+  <span id="stat-pos"></span>
+  <span id="stat-spacer"></span>
+  <div id="stat-right">
+    <span id="stat-words"></span>
+    <span id="stat-chars"></span>
+  </div>
 </div>
 
 <script type="module" src="app.js"></script>

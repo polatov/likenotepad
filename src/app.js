@@ -7,6 +7,7 @@ const { getCurrentWindow } = window.__TAURI__.window;
 const editor = document.getElementById("editor");
 const statWords = document.getElementById("stat-words");
 const statChars = document.getElementById("stat-chars");
+const statPos = document.getElementById("stat-pos");
 
 const findbar = document.getElementById("findbar");
 const findInput = document.getElementById("find-input");
@@ -73,6 +74,14 @@ function updateStatus() {
   const words = text.split(/\s+/).filter(Boolean).length;
   statWords.textContent = t("words", words);
   statChars.textContent = t("chars", chars);
+}
+
+function updatePos() {
+  const pos = editor.selectionStart;
+  const before = editor.value.slice(0, pos);
+  const line = before.split("\n").length;
+  const col = pos - before.lastIndexOf("\n");
+  statPos.textContent = (lang === "ru" ? `Лн ${line}, Ст ${col}` : `Ln ${line}, Col ${col}`);
 }
 
 // --- File operations ---
@@ -319,7 +328,7 @@ function setTheme(mode) {
 // --- Init ---
 async function init() {
   measureFindMetrics();
-  editor.addEventListener("input", () => { markDirty(); updateStatus(); hideHighlight(); });
+  editor.addEventListener("input", () => { markDirty(); updateStatus(); updatePos(); hideHighlight(); });
   findInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -342,6 +351,7 @@ async function init() {
   document.getElementById("replace-one").addEventListener("click", doReplace);
   document.getElementById("replace-all").addEventListener("click", doReplaceAll);
   findClose.addEventListener("click", closeFind);
+  document.addEventListener("selectionchange", () => { if (document.activeElement === editor) updatePos(); });
   try {
     lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
     console.log("[lang]", lang, navigator.language);
@@ -402,6 +412,7 @@ async function init() {
     });
     updateStatus();
     updateTitle();
+    updatePos();
   } catch (e) {
     console.error(e);
   }
