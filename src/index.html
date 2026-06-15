@@ -78,19 +78,6 @@
     display: flex;
   }
 
-  #find-overlay {
-    position: absolute;
-    inset: 0;
-    pointer-events: none;
-    overflow: hidden;
-  }
-
-  #find-highlight {
-    position: absolute;
-    background: rgba(255, 200, 0, 0.45);
-    border-radius: 2px;
-  }
-
   #findbar {
     flex-shrink: 0;
     display: flex;
@@ -238,7 +225,6 @@
 </div>
 <div id="editor-wrap">
   <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
-  <div id="find-overlay" hidden><span id="find-highlight"></span></div>
 </div>
 <div id="statusbar">
   <span id="stat-pos"></span>

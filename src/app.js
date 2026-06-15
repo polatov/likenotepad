@@ -13,8 +13,6 @@ const findbar = document.getElementById("findbar");
 const findInput = document.getElementById("find-input");
 const findCount = document.getElementById("find-count");
 const findClose = document.getElementById("find-close");
-const findOverlay = document.getElementById("find-overlay");
-const findHighlight = document.getElementById("find-highlight");
 
 // --- i18n ---
 let lang = "en";
@@ -140,13 +138,6 @@ editor.addEventListener("keydown", (e) => {
 });
 
 // --- Find highlight ---
-const tabSize = 4;
-let charW = 0;
-let lineHeight = 0;
-let editorPaddingTop = 0;
-let editorPaddingLeft = 0;
-let lastMatchStart = null;
-let lastMatchLen = 0;
 let replaceMode = false;
 let matchCase = false;
 let wordWrap = false;
@@ -155,70 +146,11 @@ function applyWordWrap(enabled) {
   wordWrap = enabled;
   editor.style.whiteSpace = enabled ? "pre-wrap" : "pre";
   editor.style.overflowX = enabled ? "hidden" : "auto";
-  if (enabled) hideHighlight(); // в режиме wrap жёлтый оверлей поиска прячем (координаты не учитывают перенос)
 }
 
 function applyStatusBar(visible) {
   document.getElementById("statusbar").style.display = visible ? "flex" : "none";
 }
-
-function measureFindMetrics() {
-  const canvas = document.createElement("canvas");
-  const ctx = canvas.getContext("2d");
-  ctx.font = "13px Menlo";
-  charW = ctx.measureText("M").width;
-  const cs = getComputedStyle(editor);
-  lineHeight = parseFloat(cs.lineHeight);
-  editorPaddingTop = parseFloat(cs.paddingTop);
-  editorPaddingLeft = parseFloat(cs.paddingLeft);
-}
-
-function advanceCol(str, startCol) {
-  let col = startCol;
-  for (const ch of str) {
-    if (ch === "\t") {
-      col = Math.floor(col / tabSize) * tabSize + tabSize;
-    } else {
-      col += 1;
-    }
-  }
-  return col;
-}
-
-function hideHighlight() {
-  findOverlay.hidden = true;
-  lastMatchStart = null;
-}
-
-function positionHighlight(matchStart, matchLen) {
-  if (wordWrap) { hideHighlight(); return; }
-  lastMatchStart = matchStart;
-  lastMatchLen = matchLen;
-
-  const text = editor.value;
-  const before = text.slice(0, matchStart);
-  const lines = before.split("\n");
-  const lineNum = lines.length - 1;
-  const lineText = lines[lineNum];
-
-  const visualCol = advanceCol(lineText, 0);
-  const matchText = text.slice(matchStart, matchStart + matchLen);
-  const visualEndCol = advanceCol(matchText, visualCol);
-  const visualLen = visualEndCol - visualCol;
-
-  const x = editorPaddingLeft + visualCol * charW - editor.scrollLeft;
-  const y = editorPaddingTop + lineNum * lineHeight - editor.scrollTop;
-
-  findHighlight.style.left = `${x}px`;
-  findHighlight.style.top = `${y}px`;
-  findHighlight.style.width = `${visualLen * charW}px`;
-  findHighlight.style.height = `${lineHeight}px`;
-  findOverlay.hidden = false;
-}
-
-editor.addEventListener("scroll", () => {
-  if (lastMatchStart !== null) positionHighlight(lastMatchStart, lastMatchLen);
-});
 
 // --- Find ---
 function openFind(mode = "find") {
@@ -236,7 +168,6 @@ function openFind(mode = "find") {
 function closeFind() {
   findbar.hidden = true;
   findCount.textContent = "";
-  hideHighlight();
   replaceMode = false;
   document.getElementById("findbar-row2").hidden = true;
   editor.focus();
@@ -265,7 +196,6 @@ function goToMatch(direction) {
   const matches = findAllMatches();
   if (matches.length === 0) {
     findCount.textContent = "";
-    hideHighlight();
     return;
   }
 
@@ -283,10 +213,9 @@ function goToMatch(direction) {
   }
   const idx = matches[pos];
 
+  editor.focus();
   editor.setSelectionRange(idx, idx + term.length);
-  findInput.focus();
   findCount.textContent = (pos + 1) + (lang === "ru" ? " из " : " of ") + matches.length + (lang === "ru" ? " совпадений" : " matches");
-  positionHighlight(idx, term.length);
 }
 
 function doReplace() {
@@ -321,7 +250,6 @@ function doReplaceAll() {
     document.execCommand("insertText", false, replacement);
   }
   findInput.focus();
-  hideHighlight();
   findCount.textContent = "";
 }
 
@@ -336,8 +264,7 @@ function setTheme(mode) {
 
 // --- Init ---
 async function init() {
-  measureFindMetrics();
-  editor.addEventListener("input", () => { markDirty(); updateStatus(); updatePos(); hideHighlight(); });
+  editor.addEventListener("input", () => { markDirty(); updateStatus(); updatePos(); });
   findInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") {
       e.preventDefault();
@@ -348,7 +275,6 @@ async function init() {
   findInput.addEventListener("input", () => {
     if (!findInput.value) {
       findCount.textContent = "";
-      hideHighlight();
     }
   });
   document.getElementById("find-prev").addEventListener("click", () => goToMatch(-1));
