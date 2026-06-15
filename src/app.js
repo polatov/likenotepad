@@ -367,6 +367,23 @@ async function init() {
         case "find": openFind("find"); break;
         case "find-next": goToMatch(1); break;
         case "replace": openFind("replace"); break;
+        case "datetime": {
+          const now = new Date();
+          const locale = lang === "ru" ? "ru-RU" : "en-US";
+          const stamp = now.toLocaleString(locale, {
+            day: "2-digit", month: "2-digit", year: "numeric",
+            hour: "2-digit", minute: "2-digit"
+          });
+          editor.focus();
+          // разорвать undo-серию, чтобы дата стала отдельной записью отмены
+          const p = editor.selectionStart;
+          editor.setSelectionRange(p, p);
+          document.execCommand("insertText", false, stamp);
+          markDirty();
+          updateStatus();
+          updatePos();
+          break;
+        }
         case "paste": {
           try {
             const text = await invoke("plugin:clipboard-manager|read_text");

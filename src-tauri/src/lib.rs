@@ -289,6 +289,7 @@ pub fn run() {
             let find_next_item = MenuItem::with_id(handle, "edit_find_next", if lang == "ru" { "Найти далее" } else { "Find Next" }, true, Some("CmdOrCtrl+G"))?;
             let replace_item = MenuItem::with_id(handle, "edit_replace", if lang == "ru" { "Заменить..." } else { "Replace..." }, true, Some("CmdOrCtrl+Alt+F"))?;
             let sep4 = PredefinedMenuItem::separator(handle)?;
+            let datetime_item = MenuItem::with_id(handle, "edit_datetime", if lang == "ru" { "Время/Дата" } else { "Time/Date" }, true, Some("CmdOrCtrl+Shift+T"))?;
 
             let edit_label = if lang == "ru" { "Правка" } else { "Edit" };
             let edit_menu = Submenu::with_items(handle, edit_label, true, &[
@@ -304,6 +305,7 @@ pub fn run() {
                 &replace_item,
                 &sep4,
                 &select_all,
+                &datetime_item,
             ])?;
 
             let theme_auto  = CheckMenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"    } else { "Auto"  }, true, saved_theme == "auto",  None::<&str>)?;
@@ -361,6 +363,7 @@ pub fn run() {
                     "edit_find" => { emit_to_focused(app, "menu-edit", "find"); }
                     "edit_find_next" => { emit_to_focused(app, "menu-edit", "find-next"); }
                     "edit_replace" => { emit_to_focused(app, "menu-edit", "replace"); }
+                    "edit_datetime" => { emit_to_focused(app, "menu-edit", "datetime"); }
                     id if id.starts_with("recent-") => {
                         if let Ok(index) = id["recent-".len()..].parse::<usize>() {
                             let path_opt = {
