@@ -162,6 +162,10 @@ function applyWordWrap(enabled) {
   if (enabled) hideHighlight(); // в режиме wrap жёлтый оверлей поиска прячем (координаты не учитывают перенос)
 }
 
+function applyStatusBar(visible) {
+  document.getElementById("statusbar").style.display = visible ? "flex" : "none";
+}
+
 function measureFindMetrics() {
   const canvas = document.createElement("canvas");
   const ctx = canvas.getContext("2d");
@@ -376,6 +380,12 @@ async function init() {
     } catch (e) {
       console.error("get_word_wrap:", e);
     }
+    try {
+      const savedStatus = await invoke("get_status_bar");
+      applyStatusBar(savedStatus);
+    } catch (e) {
+      console.error("get_status_bar:", e);
+    }
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
@@ -404,6 +414,14 @@ async function init() {
         await invoke("set_word_wrap", { enabled: e.payload });
       } catch (err) {
         console.error("set_word_wrap:", err);
+      }
+    });
+    await listen("menu-status-bar", async (e) => {
+      applyStatusBar(e.payload);
+      try {
+        await invoke("set_status_bar", { enabled: e.payload });
+      } catch (err) {
+        console.error("set_status_bar:", err);
       }
     });
     await listen("menu-edit", async (e) => {
