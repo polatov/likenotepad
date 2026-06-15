@@ -18,6 +18,7 @@ const findHighlight = document.getElementById("find-highlight");
 
 // --- i18n ---
 let lang = "en";
+let windowShown = false;
 
 function pluralRu(n, forms) {
   const n100 = n % 100, n10 = n % 10;
@@ -369,22 +370,29 @@ async function init() {
     lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
     console.log("[lang]", lang, navigator.language);
     try {
-      const savedTheme = await invoke("get_theme");
-      setTheme(savedTheme);
-    } catch (e) {
-      console.error("get_theme:", e);
-    }
-    try {
-      const savedWrap = await invoke("get_word_wrap");
-      applyWordWrap(savedWrap);
-    } catch (e) {
-      console.error("get_word_wrap:", e);
-    }
-    try {
-      const savedStatus = await invoke("get_status_bar");
-      applyStatusBar(savedStatus);
-    } catch (e) {
-      console.error("get_status_bar:", e);
+      try {
+        const savedTheme = await invoke("get_theme");
+        setTheme(savedTheme);
+      } catch (e) {
+        console.error("get_theme:", e);
+      }
+      try {
+        const savedWrap = await invoke("get_word_wrap");
+        applyWordWrap(savedWrap);
+      } catch (e) {
+        console.error("get_word_wrap:", e);
+      }
+      try {
+        const savedStatus = await invoke("get_status_bar");
+        applyStatusBar(savedStatus);
+      } catch (e) {
+        console.error("get_status_bar:", e);
+      }
+    } finally {
+      try {
+        await getCurrentWindow().show();
+        windowShown = true;
+      } catch (e) { console.error("show:", e); }
     }
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
@@ -461,3 +469,7 @@ async function init() {
 }
 
 init();
+setTimeout(() => {
+  if (windowShown) return;
+  try { getCurrentWindow().show(); windowShown = true; } catch (e) {}
+}, 1500);

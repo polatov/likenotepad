@@ -40,6 +40,7 @@ fn new_window(app: &tauri::AppHandle) {
         .position(x, y)
         .resizable(true)
         .decorations(true)
+        .visible(false)
         .build()
     {
         eprintln!("new_window error: {e}");
