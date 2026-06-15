@@ -153,6 +153,14 @@ let lastMatchStart = null;
 let lastMatchLen = 0;
 let replaceMode = false;
 let matchCase = false;
+let wordWrap = false;
+
+function applyWordWrap(enabled) {
+  wordWrap = enabled;
+  editor.style.whiteSpace = enabled ? "pre-wrap" : "pre";
+  editor.style.overflowX = enabled ? "hidden" : "auto";
+  if (enabled) hideHighlight(); // в режиме wrap жёлтый оверлей поиска прячем (координаты не учитывают перенос)
+}
 
 function measureFindMetrics() {
   const canvas = document.createElement("canvas");
@@ -183,6 +191,7 @@ function hideHighlight() {
 }
 
 function positionHighlight(matchStart, matchLen) {
+  if (wordWrap) { hideHighlight(); return; }
   lastMatchStart = matchStart;
   lastMatchLen = matchLen;
 
@@ -361,6 +370,12 @@ async function init() {
     } catch (e) {
       console.error("get_theme:", e);
     }
+    try {
+      const savedWrap = await invoke("get_word_wrap");
+      applyWordWrap(savedWrap);
+    } catch (e) {
+      console.error("get_word_wrap:", e);
+    }
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
@@ -381,6 +396,14 @@ async function init() {
         await invoke("set_theme", { theme: e.payload });
       } catch (err) {
         console.error("set_theme:", err);
+      }
+    });
+    await listen("menu-word-wrap", async (e) => {
+      applyWordWrap(e.payload);
+      try {
+        await invoke("set_word_wrap", { enabled: e.payload });
+      } catch (err) {
+        console.error("set_word_wrap:", err);
       }
     });
     await listen("menu-edit", async (e) => {
