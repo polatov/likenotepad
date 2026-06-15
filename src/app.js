@@ -120,6 +120,10 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       if (e.shiftKey) saveFileAs(); else saveFile();
     }
+    else if (e.shiftKey && (e.key === "g" || e.key === "G")) {
+      e.preventDefault();
+      goToMatch(-1);
+    }
   }
   else if (e.key === "Escape" && !findbar.hidden) {
     e.preventDefault();
