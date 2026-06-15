@@ -125,6 +125,18 @@ fn set_word_wrap(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_status_bar(app: tauri::AppHandle) -> bool {
+    config::load(&app).status_bar
+}
+
+#[tauri::command]
+fn set_status_bar(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.status_bar = enabled;
+    config::save(&app, &cfg)
+}
+
+#[tauri::command]
 async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -> Result<Option<String>, String> {
     let last_dir = config::load(&app).last_dir;
     let (tx, rx) = std::sync::mpsc::channel();
@@ -218,6 +230,7 @@ pub fn run() {
             let mut cfg = config::load(handle);
             let saved_theme = cfg.theme.clone();
             let saved_wrap = cfg.word_wrap;
+            let saved_status = cfg.status_bar;
             cfg.recent_files.retain(|p| std::path::Path::new(p).exists());
             let _ = config::save(handle, &cfg);
             *app.state::<RecentFilesState>().0.lock().unwrap() = cfg.recent_files.clone();
@@ -244,7 +257,7 @@ pub fn run() {
             let quit_item = PredefinedMenuItem::quit(handle, Some(quit_label))?;
             let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item, &sep_app, &quit_item])?;
 
-            let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Новый" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
+            let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Создать" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
             let open_item = MenuItem::with_id(handle, "open", if lang == "ru" { "Открыть..." } else { "Open..." }, true, Some("CmdOrCtrl+O"))?;
             let recent_label = if lang == "ru" { "Открыть недавние" } else { "Open Recent" };
             let recent_submenu = Submenu::with_id(handle, "recent_submenu", recent_label, true)?;
@@ -271,7 +284,10 @@ pub fn run() {
             let paste      = MenuItem::with_id(handle, "edit_paste",      if lang == "ru" { "Вставить"     } else { "Paste"       }, true, Some("CmdOrCtrl+V"))?;
             let sep3 = PredefinedMenuItem::separator(handle)?;
             let select_all = MenuItem::with_id(handle, "edit_select_all", if lang == "ru" { "Выделить всё" } else { "Select All"  }, true, Some("CmdOrCtrl+A"))?;
+            let find_item = MenuItem::with_id(handle, "edit_find", if lang == "ru" { "Найти..." } else { "Find..." }, true, Some("CmdOrCtrl+F"))?;
+            let find_next_item = MenuItem::with_id(handle, "edit_find_next", if lang == "ru" { "Найти далее" } else { "Find Next" }, true, Some("CmdOrCtrl+G"))?;
             let replace_item = MenuItem::with_id(handle, "edit_replace", if lang == "ru" { "Заменить..." } else { "Replace..." }, true, Some("CmdOrCtrl+Alt+F"))?;
+            let sep4 = PredefinedMenuItem::separator(handle)?;
 
             let edit_label = if lang == "ru" { "Правка" } else { "Edit" };
             let edit_menu = Submenu::with_items(handle, edit_label, true, &[
@@ -282,8 +298,11 @@ pub fn run() {
                 &copy,
                 &paste,
                 &sep3,
-                &select_all,
+                &find_item,
+                &find_next_item,
                 &replace_item,
+                &sep4,
+                &select_all,
             ])?;
 
             let theme_auto  = CheckMenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"    } else { "Auto"  }, true, saved_theme == "auto",  None::<&str>)?;
@@ -293,11 +312,17 @@ pub fn run() {
             let tl = theme_light.clone();
             let td = theme_dark.clone();
 
+            let status_item = CheckMenuItem::with_id(handle, "status_bar", if lang == "ru" { "Строка состояния" } else { "Status Bar" }, true, saved_status, None::<&str>)?;
+            let si = status_item.clone();
+            let sep_view = PredefinedMenuItem::separator(handle)?;
+
             let view_label = if lang == "ru" { "Вид" } else { "View" };
             let view_menu = Submenu::with_items(handle, view_label, true, &[
                 &theme_auto,
                 &theme_light,
                 &theme_dark,
+                &sep_view,
+                &status_item,
             ])?;
 
             let wrap_label = if lang == "ru" { "Перенос по словам" } else { "Word Wrap" };
@@ -306,13 +331,16 @@ pub fn run() {
             let wrap_state = std::sync::Arc::new(AtomicBool::new(saved_wrap));
             let wrap_state_menu = wrap_state.clone();
 
+            let status_state = std::sync::Arc::new(AtomicBool::new(saved_status));
+            let status_state_menu = status_state.clone();
+
             let format_label = if lang == "ru" { "Формат" } else { "Format" };
             let format_menu = Submenu::with_items(handle, format_label, true, &[&wrap_item])?;
 
-            let help_label = if lang == "ru" { "Помощь" } else { "Help" };
+            let help_label = if lang == "ru" { "Справка" } else { "Help" };
             let help_menu = Submenu::with_id_and_items(handle, HELP_SUBMENU_ID, help_label, true, &[])?;
 
-            let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &view_menu, &format_menu, &help_menu])?;
+            let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &format_menu, &view_menu, &help_menu])?;
             app.set_menu(menu)?;
             rebuild_recent_menu(handle);
 
@@ -329,6 +357,8 @@ pub fn run() {
                     "edit_copy"       => { emit_to_focused(app, "menu-edit", "copy"); }
                     "edit_paste"      => { emit_to_focused(app, "menu-edit", "paste"); }
                     "edit_select_all" => { emit_to_focused(app, "menu-edit", "select-all"); }
+                    "edit_find" => { emit_to_focused(app, "menu-edit", "find"); }
+                    "edit_find_next" => { emit_to_focused(app, "menu-edit", "find-next"); }
                     "edit_replace" => { emit_to_focused(app, "menu-edit", "replace"); }
                     id if id.starts_with("recent-") => {
                         if let Ok(index) = id["recent-".len()..].parse::<usize>() {
@@ -388,6 +418,12 @@ pub fn run() {
                         let _ = wi.set_checked(new_state);
                         emit_to_focused(app, "menu-word-wrap", new_state);
                     }
+                    "status_bar" => {
+                        let new_state = !status_state_menu.load(Ordering::Relaxed);
+                        status_state_menu.store(new_state, Ordering::Relaxed);
+                        let _ = si.set_checked(new_state);
+                        emit_to_focused(app, "menu-status-bar", new_state);
+                    }
                     _ => {}
                 }
             });
@@ -403,6 +439,8 @@ pub fn run() {
             set_theme,
             get_word_wrap,
             set_word_wrap,
+            get_status_bar,
+            set_status_bar,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

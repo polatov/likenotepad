@@ -8,6 +8,7 @@ pub struct Config {
     pub recent_files: Vec<String>,
     pub last_dir: Option<String>,
     pub word_wrap: bool,
+    pub status_bar: bool,
 }
 
 impl Default for Config {
@@ -17,6 +18,7 @@ impl Default for Config {
             recent_files: Vec::new(),
             last_dir: None,
             word_wrap: false,
+            status_bar: true,
         }
     }
 }
