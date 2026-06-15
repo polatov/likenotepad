@@ -122,11 +122,6 @@ document.addEventListener("keydown", (e) => {
       e.preventDefault();
       if (e.shiftKey) saveFileAs(); else saveFile();
     }
-    else if (e.key === "f" || e.key === "F") { e.preventDefault(); openFind("find"); }
-  }
-  else if ((e.metaKey || e.ctrlKey) && e.altKey && (e.key === "f" || e.key === "F")) {
-    e.preventDefault();
-    openFind("replace");
   }
   else if (e.key === "Escape" && !findbar.hidden) {
     e.preventDefault();
@@ -439,6 +434,8 @@ async function init() {
         case "cut":        document.execCommand("cut"); break;
         case "copy":       document.execCommand("copy"); break;
         case "select-all": document.execCommand("selectAll"); break;
+        case "find": openFind("find"); break;
+        case "find-next": goToMatch(1); break;
         case "replace": openFind("replace"); break;
         case "paste": {
           try {
