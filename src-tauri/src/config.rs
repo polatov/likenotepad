@@ -7,6 +7,7 @@ pub struct Config {
     pub theme: String,
     pub recent_files: Vec<String>,
     pub last_dir: Option<String>,
+    pub word_wrap: bool,
 }
 
 impl Default for Config {
@@ -15,6 +16,7 @@ impl Default for Config {
             theme: "auto".to_string(),
             recent_files: Vec::new(),
             last_dir: None,
+            word_wrap: false,
         }
     }
 }

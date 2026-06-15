@@ -1,6 +1,6 @@
 mod config;
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use tauri::{
     menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID},
     AppHandle, Emitter, Manager,
@@ -113,6 +113,18 @@ fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn get_word_wrap(app: tauri::AppHandle) -> bool {
+    config::load(&app).word_wrap
+}
+
+#[tauri::command]
+fn set_word_wrap(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.word_wrap = enabled;
+    config::save(&app, &cfg)
+}
+
+#[tauri::command]
 async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -> Result<Option<String>, String> {
     let last_dir = config::load(&app).last_dir;
     let (tx, rx) = std::sync::mpsc::channel();
@@ -205,6 +217,7 @@ pub fn run() {
             let handle = app.handle();
             let mut cfg = config::load(handle);
             let saved_theme = cfg.theme.clone();
+            let saved_wrap = cfg.word_wrap;
             cfg.recent_files.retain(|p| std::path::Path::new(p).exists());
             let _ = config::save(handle, &cfg);
             *app.state::<RecentFilesState>().0.lock().unwrap() = cfg.recent_files.clone();
@@ -287,10 +300,19 @@ pub fn run() {
                 &theme_dark,
             ])?;
 
+            let wrap_label = if lang == "ru" { "Перенос по словам" } else { "Word Wrap" };
+            let wrap_item = CheckMenuItem::with_id(handle, "word_wrap", wrap_label, true, saved_wrap, None::<&str>)?;
+            let wi = wrap_item.clone();
+            let wrap_state = std::sync::Arc::new(AtomicBool::new(saved_wrap));
+            let wrap_state_menu = wrap_state.clone();
+
+            let format_label = if lang == "ru" { "Формат" } else { "Format" };
+            let format_menu = Submenu::with_items(handle, format_label, true, &[&wrap_item])?;
+
             let help_label = if lang == "ru" { "Помощь" } else { "Help" };
             let help_menu = Submenu::with_id_and_items(handle, HELP_SUBMENU_ID, help_label, true, &[])?;
 
-            let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &view_menu, &help_menu])?;
+            let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &view_menu, &format_menu, &help_menu])?;
             app.set_menu(menu)?;
             rebuild_recent_menu(handle);
 
@@ -360,6 +382,12 @@ pub fn run() {
                                       else { "auto" };
                         emit_to_focused(app, "menu-theme", payload);
                     }
+                    "word_wrap" => {
+                        let new_state = !wrap_state_menu.load(Ordering::Relaxed);
+                        wrap_state_menu.store(new_state, Ordering::Relaxed);
+                        let _ = wi.set_checked(new_state);
+                        emit_to_focused(app, "menu-word-wrap", new_state);
+                    }
                     _ => {}
                 }
             });
@@ -373,6 +401,8 @@ pub fn run() {
             save_file_as,
             get_theme,
             set_theme,
+            get_word_wrap,
+            set_word_wrap,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
