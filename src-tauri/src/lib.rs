@@ -6,6 +6,10 @@ use tauri::{
     AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
+use objc2::rc::autoreleasepool;
+use objc2::MainThreadMarker;
+use objc2_app_kit::{NSAlert, NSAlertStyle};
+use objc2_foundation::NSString;
 
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
@@ -16,6 +20,37 @@ fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, pa
             return;
         }
     }
+}
+
+// Показывает трёхкнопочный NSAlert. ДОЛЖЕН вызываться на главном потоке.
+// Возврат: 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
+fn show_quit_alert(count: usize, lang: &str) -> isize {
+    autoreleasepool(|_| {
+        let (msg, info, b_save, b_dont, b_cancel) = if lang == "ru" {
+            (
+                format!("У вас {} несохранённых документов.", count),
+                "Хотите сохранить изменения перед выходом? Несохранённые изменения будут потеряны.".to_string(),
+                "Сохранить…", "Не сохранять", "Отмена",
+            )
+        } else {
+            (
+                format!("You have {} documents with unsaved changes.", count),
+                "Do you want to save your changes before quitting? Your changes will be lost if you don't save.".to_string(),
+                "Save…", "Don't Save", "Cancel",
+            )
+        };
+        let mtm = MainThreadMarker::new().unwrap();
+        let alert = NSAlert::new(mtm);
+        alert.setAlertStyle(NSAlertStyle::Warning);
+        alert.setMessageText(&NSString::from_str(&msg));
+        alert.setInformativeText(&NSString::from_str(&info));
+        alert.addButtonWithTitle(&NSString::from_str(b_save));
+        alert.addButtonWithTitle(&NSString::from_str(b_dont));
+        alert.addButtonWithTitle(&NSString::from_str(b_cancel));
+        let response = alert.runModal();
+        // NSAlertFirstButtonReturn = 1000, второй = 1001, третий = 1002
+        response - 1000
+    })
 }
 
 fn new_window(app: &tauri::AppHandle) {
@@ -65,7 +100,7 @@ fn get_lang() -> String {
 #[tauri::command]
 async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
     let last_dir = config::load(&app).last_dir;
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = tokio::sync::oneshot::channel();
     let mut builder = app.dialog()
         .file()
         .add_filter("Text", &["txt", "md", "log", "csv"]);
@@ -75,7 +110,7 @@ async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
     builder.pick_file(move |path| {
         let _ = tx.send(path);
     });
-    let path = rx.recv().map_err(|e| e.to_string())?;
+    let path = rx.await.map_err(|e| e.to_string())?;
     match path {
         Some(FilePath::Path(p)) => {
             let path_str = p.to_string_lossy().to_string();
@@ -138,16 +173,64 @@ fn set_status_bar(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn set_dirty(window: tauri::Window, dirty: bool) {
+    window.state::<DirtyState>()
+        .0.lock().unwrap()
+        .insert(window.label().to_string(), dirty);
+}
+
+#[tauri::command]
 fn confirm_close(window: tauri::Window) {
     window.state::<ConfirmedWindowsState>()
         .0.lock().unwrap().insert(window.label().to_string());
     let _ = window.close();
 }
 
+fn advance_quit(app: &AppHandle) {
+    let next = {
+        let state = app.state::<QuitState>();
+        let mut guard = state.0.lock().unwrap();
+        if guard.cancelled { return; }
+        guard.queue.pop()
+    };
+    match next {
+        Some(label) => {
+            let app_clone = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                if let Some(win) = app_clone.webview_windows().get(&label) {
+                    let _ = win.set_focus();
+                    let _ = app_clone.emit_to(label.as_str(), "quit-save-window", ());
+                } else {
+                    advance_quit(&app_clone);
+                }
+            });
+        }
+        None => {
+            let app_clone = app.clone();
+            let _ = app.run_on_main_thread(move || {
+                app_clone.exit(0);
+            });
+        }
+    }
+}
+
+#[tauri::command]
+fn confirm_quit_window(app: AppHandle) {
+    advance_quit(&app);
+}
+
+#[tauri::command]
+fn cancel_quit(app: AppHandle) {
+    let state = app.state::<QuitState>();
+    let mut guard = state.0.lock().unwrap();
+    guard.cancelled = true;
+    guard.queue.clear();
+}
+
 #[tauri::command]
 async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -> Result<Option<String>, String> {
     let last_dir = config::load(&app).last_dir;
-    let (tx, rx) = std::sync::mpsc::channel();
+    let (tx, rx) = tokio::sync::oneshot::channel();
     let mut builder = app.dialog()
         .file()
         .add_filter("Text", &["txt"])
@@ -158,7 +241,7 @@ async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -
     builder.save_file(move |path| {
         let _ = tx.send(path);
     });
-    let path = rx.recv().map_err(|e| e.to_string())?;
+    let path = rx.await.map_err(|e| e.to_string())?;
     match path {
         Some(FilePath::Path(p)) => {
             let path_str = p.to_string_lossy().to_string();
@@ -173,6 +256,12 @@ async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -
 struct RecentFilesState(std::sync::Mutex<Vec<String>>);
 struct RecentMenuState(std::sync::Mutex<Option<tauri::menu::Submenu<tauri::Wry>>>);
 struct ConfirmedWindowsState(std::sync::Mutex<std::collections::HashSet<String>>);
+struct DirtyState(std::sync::Mutex<std::collections::HashMap<String, bool>>);
+struct QuitProgress {
+    queue: Vec<String>,
+    cancelled: bool,
+}
+struct QuitState(std::sync::Mutex<QuitProgress>);
 
 fn add_recent(app: &tauri::AppHandle, path: &str) {
     // обновить state: убрать дубликат, вставить в начало, обрезать до 10
@@ -235,6 +324,8 @@ pub fn run() {
         .manage(RecentFilesState(std::sync::Mutex::new(Vec::new())))
         .manage(RecentMenuState(std::sync::Mutex::new(None)))
         .manage(ConfirmedWindowsState(std::sync::Mutex::new(std::collections::HashSet::new())))
+        .manage(DirtyState(std::sync::Mutex::new(std::collections::HashMap::new())))
+        .manage(QuitState(std::sync::Mutex::new(QuitProgress { queue: Vec::new(), cancelled: false })))
         .setup(move |app| {
             let handle = app.handle();
             let mut cfg = config::load(handle);
@@ -264,7 +355,7 @@ pub fn run() {
             }))?;
             let sep_app = PredefinedMenuItem::separator(handle)?;
             let quit_label = if lang == "ru" { "Завершить LikeNotepad.exe" } else { "Quit LikeNotepad.exe" };
-            let quit_item = PredefinedMenuItem::quit(handle, Some(quit_label))?;
+            let quit_item = MenuItem::with_id(handle, "quit", quit_label, true, Some("CmdOrCtrl+Q"))?;
             let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item, &sep_app, &quit_item])?;
 
             let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Создать" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
@@ -365,6 +456,54 @@ pub fn run() {
             // Handle menu events
             app.on_menu_event(move |app, event| {
                 match event.id().as_ref() {
+                    "quit" => {
+                        let dirty_labels: Vec<String> = {
+                            let dirty = app.state::<DirtyState>();
+                            let guard = dirty.0.lock().unwrap();
+                            let open: std::collections::HashSet<String> =
+                                app.webview_windows().keys().cloned().collect();
+                            let mut labels: Vec<String> = guard.iter()
+                                .filter(|(label, &is_dirty)| is_dirty && open.contains(*label))
+                                .map(|(label, _)| label.clone())
+                                .collect();
+                            let order = |l: &str| -> u32 {
+                                if l == "main" { 0 }
+                                else { l.strip_prefix("win-").and_then(|n| n.parse().ok()).unwrap_or(u32::MAX) }
+                            };
+                            labels.sort_by_key(|l| order(l));
+                            labels.reverse();
+                            labels
+                        };
+
+                        if dirty_labels.is_empty() {
+                            app.exit(0);
+                            return;
+                        }
+
+                        let count = dirty_labels.len();
+                        let lang = system_lang();
+                        let app_clone = app.clone();
+                        let _ = app.run_on_main_thread(move || {
+                            let choice = show_quit_alert(count, lang);
+                            match choice {
+                                0 => {
+                                    // Сохранить — обойти грязные окна по очереди
+                                    let rest: Vec<String> = dirty_labels[1..].iter().cloned().rev().collect();
+                                    {
+                                        let state = app_clone.state::<QuitState>();
+                                        let mut guard = state.0.lock().unwrap();
+                                        *guard = QuitProgress { queue: rest, cancelled: false };
+                                    }
+                                    if let Some(win) = app_clone.webview_windows().get(&dirty_labels[0]) {
+                                        let _ = win.set_focus();
+                                        let _ = app_clone.emit_to(dirty_labels[0].as_str(), "quit-save-window", ());
+                                    }
+                                }
+                                1 => { app_clone.exit(0); }
+                                _ => { /* Отмена — ничего */ }
+                            }
+                        });
+                    }
                     "new" => { new_window(app); }
                     "open" => { emit_to_focused(app, "menu-open", ()); }
                     "save" => { emit_to_focused(app, "menu-save", ()); }
@@ -472,7 +611,10 @@ pub fn run() {
             set_word_wrap,
             get_status_bar,
             set_status_bar,
+            set_dirty,
             confirm_close,
+            confirm_quit_window,
+            cancel_quit,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -20,6 +20,7 @@ const gotoInput = document.getElementById("goto-input");
 let lang = "en";
 let windowShown = false;
 let isHandlingClose = false;
+let isHandlingQuit = false;
 
 function pluralRu(n, forms) {
   const n100 = n % 100, n10 = n % 10;
@@ -66,8 +67,11 @@ function updateTitle() {
   getCurrentWindow().setTitle(title);
 }
 
-function markDirty() { dirty = true; updateTitle(); }
-function markClean() { dirty = false; updateTitle(); }
+function markDirty() { dirty = true; updateTitle(); syncDirty(); }
+function markClean() { dirty = false; updateTitle(); syncDirty(); }
+function syncDirty() {
+  try { invoke("set_dirty", { dirty }); } catch (e) {}
+}
 
 // --- Status bar ---
 function updateStatus() {
@@ -301,6 +305,7 @@ function setTheme(mode) {
 }
 
 async function handleCloseRequested() {
+  if (isHandlingQuit) return;
   if (isHandlingClose) return;
   isHandlingClose = true;
   try {
@@ -327,6 +332,24 @@ async function handleCloseRequested() {
     await invoke("confirm_close");
   } finally {
     isHandlingClose = false;
+  }
+}
+
+async function handleQuitSaveWindow() {
+  if (isHandlingQuit) return;
+  isHandlingQuit = true;
+  try {
+    if (dirty) {
+      try { await getCurrentWindow().setFocus(); } catch (e) {}
+      const saved = await saveFile();
+      if (!saved) {
+        await invoke("cancel_quit");
+        return;
+      }
+    }
+    await invoke("confirm_quit_window");
+  } finally {
+    isHandlingQuit = false;
   }
 }
 
@@ -390,6 +413,7 @@ async function init() {
     }
     await listen("close-requested", handleCloseRequested);
     await listen("menu-close-window", handleCloseRequested);
+    await getCurrentWindow().listen("quit-save-window", handleQuitSaveWindow);
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
