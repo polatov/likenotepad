@@ -26,15 +26,29 @@ fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, pa
 // Возврат: 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
 fn show_quit_alert(count: usize, lang: &str) -> isize {
     autoreleasepool(|_| {
+        let plural_doc = |n: usize| -> &'static str {
+            let n100 = n % 100;
+            let n10 = n % 10;
+            if n100 >= 11 && n100 <= 14 { "документов" }
+            else if n10 == 1 { "документ" }
+            else if n10 >= 2 && n10 <= 4 { "документа" }
+            else { "документов" }
+        };
         let (msg, info, b_save, b_dont, b_cancel) = if lang == "ru" {
+            let msg = if count == 1 {
+                "Имеется несохранённый документ.".to_string()
+            } else {
+                format!("Имеется {} несохранённых {}.", count, plural_doc(count))
+            };
             (
-                format!("У вас {} несохранённых документов.", count),
-                "Хотите сохранить изменения перед выходом? Несохранённые изменения будут потеряны.".to_string(),
+                msg,
+                "Хотите сохранить изменения перед завершением? Несохранённые изменения будут потеряны.".to_string(),
                 "Сохранить…", "Не сохранять", "Отмена",
             )
         } else {
+            let (n_word, doc_word) = if count == 1 { ("one", "document") } else { ("several", "documents") };
             (
-                format!("You have {} documents with unsaved changes.", count),
+                format!("You have {} {} with unsaved changes.", n_word, doc_word),
                 "Do you want to save your changes before quitting? Your changes will be lost if you don't save.".to_string(),
                 "Save…", "Don't Save", "Cancel",
             )
