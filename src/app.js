@@ -417,6 +417,9 @@ async function init() {
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
+    await listen("menu-page-setup", async () => {
+      await invoke("page_setup");
+    });
     await listen("menu-print", async () => {
       const filename = currentPath ? currentPath.split('/').pop() : (lang === 'ru' ? 'Без имени' : 'Untitled');
       await invoke("print_document", { text: editor.value, filename });

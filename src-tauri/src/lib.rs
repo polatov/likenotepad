@@ -8,7 +8,7 @@ use tauri::{
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use objc2::rc::autoreleasepool;
 use objc2::{AnyThread, MainThreadMarker, MainThreadOnly};
-use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSPrintOperation, NSTextView};
+use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSPageLayout, NSPrintOperation, NSTextView};
 use objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSPoint, NSRect, NSSize, NSString};
 
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
@@ -309,6 +309,17 @@ fn print_document(app: AppHandle, text: String, filename: String) {
     });
 }
 
+#[tauri::command]
+fn page_setup(app: AppHandle) {
+    let _ = app.run_on_main_thread(move || {
+        autoreleasepool(|_| {
+            let mtm = unsafe { MainThreadMarker::new_unchecked() };
+            let layout = NSPageLayout::pageLayout(mtm);
+            layout.runModal();
+        });
+    });
+}
+
 struct RecentFilesState(std::sync::Mutex<Vec<String>>);
 struct RecentMenuState(std::sync::Mutex<Option<tauri::menu::Submenu<tauri::Wry>>>);
 struct ConfirmedWindowsState(std::sync::Mutex<std::collections::HashSet<String>>);
@@ -422,6 +433,7 @@ pub fn run() {
             let save_as_item = MenuItem::with_id(handle, "save_as", if lang == "ru" { "Сохранить как..." } else { "Save As..." }, true, Some("CmdOrCtrl+Shift+S"))?;
             let sep = PredefinedMenuItem::separator(handle)?;
             let sep_before_print = PredefinedMenuItem::separator(handle)?;
+            let page_setup_item = MenuItem::with_id(handle, "page_setup", if lang == "ru" { "Параметры страницы..." } else { "Page Setup..." }, true, Some("CmdOrCtrl+Shift+P"))?;
             let print_item = MenuItem::with_id(handle, "print", if lang == "ru" { "Печать..." } else { "Print..." }, true, Some("CmdOrCtrl+P"))?;
             let sep_close = PredefinedMenuItem::separator(handle)?;
             let close_item = MenuItem::with_id(handle, "close_window", if lang == "ru" { "Закрыть" } else { "Close" }, true, Some("CmdOrCtrl+W"))?;
@@ -436,6 +448,7 @@ pub fn run() {
                 &save_as_item,
                 &sep_before_print,
                 &print_item,
+                &page_setup_item,
                 &sep_close,
                 &close_item,
             ])?;
@@ -568,6 +581,7 @@ pub fn run() {
                     "open" => { emit_to_focused(app, "menu-open", ()); }
                     "save" => { emit_to_focused(app, "menu-save", ()); }
                     "save_as"    => { emit_to_focused(app, "menu-save-as", ()); }
+                    "page_setup" => { emit_to_focused(app, "menu-page-setup", ()); }
                     "print"      => { emit_to_focused(app, "menu-print", ()); }
                     "close_window" => { emit_to_focused(app, "menu-close-window", ()); }
                     "edit_undo"       => { emit_to_focused(app, "menu-edit", "undo"); }
@@ -675,6 +689,7 @@ pub fn run() {
             set_dirty,
             confirm_close,
             print_document,
+            page_setup,
             confirm_quit_window,
             cancel_quit,
         ])
