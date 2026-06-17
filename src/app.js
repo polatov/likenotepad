@@ -13,10 +13,13 @@ const findbar = document.getElementById("findbar");
 const findInput = document.getElementById("find-input");
 const findCount = document.getElementById("find-count");
 const findClose = document.getElementById("find-close");
+const gotobar = document.getElementById("gotobar");
+const gotoInput = document.getElementById("goto-input");
 
 // --- i18n ---
 let lang = "en";
 let windowShown = false;
+let isHandlingClose = false;
 
 function pluralRu(n, forms) {
   const n100 = n % 100, n10 = n % 10;
@@ -102,14 +105,16 @@ async function saveFile() {
   if (!currentPath) return saveFileAs();
   await invoke("save_file", { path: currentPath, content: editor.value });
   markClean();
+  return true;
 }
 
 async function saveFileAs() {
   const suggestedName = currentPath ? currentPath.split("/").pop() : (lang === "ru" ? "Без имени.txt" : "Untitled.txt");
   const result = await invoke("save_file_as", { content: editor.value, suggestedName });
-  if (!result) return;
+  if (!result) return false;
   currentPath = result;
   markClean();
+  return true;
 }
 
 // --- Keyboard shortcuts ---
@@ -175,6 +180,35 @@ function closeFind() {
   replaceMode = false;
   document.getElementById("findbar-row2").hidden = true;
   editor.focus();
+}
+
+function openGoto() {
+  gotobar.hidden = false;
+  gotoInput.value = "";
+  gotoInput.focus();
+}
+
+function closeGoto() {
+  gotobar.hidden = true;
+  editor.focus();
+}
+
+function doGoto() {
+  const n = parseInt(gotoInput.value, 10);
+  if (isNaN(n) || n < 1) return;
+  const lines = editor.value.split("\n");
+  const target = Math.min(n, lines.length);
+  let pos = 0;
+  for (let i = 0; i < target - 1; i++) pos += lines[i].length + 1;
+  editor.focus();
+  editor.setSelectionRange(pos, pos);
+  const style = getComputedStyle(editor);
+  const lineHeight = parseFloat(style.lineHeight) || parseFloat(style.fontSize) * 1.5;
+  const paddingTop = parseFloat(style.paddingTop) || 0;
+  const targetScrollTop = paddingTop + (target - 1) * lineHeight - editor.clientHeight / 2;
+  editor.scrollTop = Math.max(0, targetScrollTop);
+  closeGoto();
+  updatePos();
 }
 
 function findAllMatches() {
@@ -266,6 +300,36 @@ function setTheme(mode) {
   }
 }
 
+async function handleCloseRequested() {
+  if (isHandlingClose) return;
+  isHandlingClose = true;
+  try {
+    if (!dirty) {
+      await invoke("confirm_close");
+      return;
+    }
+
+    const name = currentPath
+      ? currentPath.split('/').pop()
+      : (lang === "ru" ? "Без названия" : "Untitled");
+
+    const shouldSave = await ask(
+      lang === "ru" ? `Сохранить изменения в «${name}»?` : `Save changes to "${name}"?`,
+      { title: "LikeNotepad", kind: "warning",
+        okLabel: lang === "ru" ? "Сохранить" : "Save",
+        cancelLabel: lang === "ru" ? "Не сохранять" : "Don't Save" }
+    );
+
+    if (shouldSave) {
+      const saved = await saveFile();
+      if (!saved) return;
+    }
+    await invoke("confirm_close");
+  } finally {
+    isHandlingClose = false;
+  }
+}
+
 // --- Init ---
 async function init() {
   editor.addEventListener("input", () => { markDirty(); updateStatus(); updatePos(); });
@@ -290,6 +354,11 @@ async function init() {
   document.getElementById("replace-one").addEventListener("click", doReplace);
   document.getElementById("replace-all").addEventListener("click", doReplaceAll);
   findClose.addEventListener("click", closeFind);
+  gotoInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") { e.preventDefault(); doGoto(); }
+    else if (e.key === "Escape") { e.preventDefault(); closeGoto(); }
+  });
+  document.getElementById("goto-close").addEventListener("click", closeGoto);
   document.addEventListener("selectionchange", () => { if (document.activeElement === editor) updatePos(); });
   try {
     lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
@@ -319,6 +388,8 @@ async function init() {
         windowShown = true;
       } catch (e) { console.error("show:", e); }
     }
+    await listen("close-requested", handleCloseRequested);
+    await listen("menu-close-window", handleCloseRequested);
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
@@ -365,6 +436,7 @@ async function init() {
         case "copy":       document.execCommand("copy"); break;
         case "select-all": document.execCommand("selectAll"); break;
         case "find": openFind("find"); break;
+        case "goto": openGoto(); break;
         case "find-next": goToMatch(1); break;
         case "replace": openFind("replace"); break;
         case "datetime": {

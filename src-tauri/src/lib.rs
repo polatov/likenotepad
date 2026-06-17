@@ -138,6 +138,13 @@ fn set_status_bar(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn confirm_close(window: tauri::Window) {
+    window.state::<ConfirmedWindowsState>()
+        .0.lock().unwrap().insert(window.label().to_string());
+    let _ = window.close();
+}
+
+#[tauri::command]
 async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -> Result<Option<String>, String> {
     let last_dir = config::load(&app).last_dir;
     let (tx, rx) = std::sync::mpsc::channel();
@@ -165,6 +172,7 @@ async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -
 
 struct RecentFilesState(std::sync::Mutex<Vec<String>>);
 struct RecentMenuState(std::sync::Mutex<Option<tauri::menu::Submenu<tauri::Wry>>>);
+struct ConfirmedWindowsState(std::sync::Mutex<std::collections::HashSet<String>>);
 
 fn add_recent(app: &tauri::AppHandle, path: &str) {
     // обновить state: убрать дубликат, вставить в начало, обрезать до 10
@@ -226,6 +234,7 @@ pub fn run() {
         .plugin(tauri_plugin_fs::init())
         .manage(RecentFilesState(std::sync::Mutex::new(Vec::new())))
         .manage(RecentMenuState(std::sync::Mutex::new(None)))
+        .manage(ConfirmedWindowsState(std::sync::Mutex::new(std::collections::HashSet::new())))
         .setup(move |app| {
             let handle = app.handle();
             let mut cfg = config::load(handle);
@@ -265,6 +274,8 @@ pub fn run() {
             let save_item = MenuItem::with_id(handle, "save", if lang == "ru" { "Сохранить" } else { "Save" }, true, Some("CmdOrCtrl+S"))?;
             let save_as_item = MenuItem::with_id(handle, "save_as", if lang == "ru" { "Сохранить как..." } else { "Save As..." }, true, Some("CmdOrCtrl+Shift+S"))?;
             let sep = PredefinedMenuItem::separator(handle)?;
+            let sep_close = PredefinedMenuItem::separator(handle)?;
+            let close_item = MenuItem::with_id(handle, "close_window", if lang == "ru" { "Закрыть" } else { "Close" }, true, Some("CmdOrCtrl+W"))?;
 
             let file_label = if lang == "ru" { "Файл" } else { "File" };
             let file_menu = Submenu::with_items(handle, file_label, true, &[
@@ -274,6 +285,8 @@ pub fn run() {
                 &sep,
                 &save_item,
                 &save_as_item,
+                &sep_close,
+                &close_item,
             ])?;
             app.state::<RecentMenuState>().0.lock().unwrap().replace(recent_submenu.clone());
 
@@ -288,6 +301,7 @@ pub fn run() {
             let find_item = MenuItem::with_id(handle, "edit_find", if lang == "ru" { "Найти..." } else { "Find..." }, true, Some("CmdOrCtrl+F"))?;
             let find_next_item = MenuItem::with_id(handle, "edit_find_next", if lang == "ru" { "Найти далее" } else { "Find Next" }, true, Some("CmdOrCtrl+G"))?;
             let replace_item = MenuItem::with_id(handle, "edit_replace", if lang == "ru" { "Заменить..." } else { "Replace..." }, true, Some("CmdOrCtrl+Alt+F"))?;
+            let goto_item = MenuItem::with_id(handle, "edit_goto", if lang == "ru" { "Перейти..." } else { "Go to..." }, true, Some("CmdOrCtrl+L"))?;
             let sep4 = PredefinedMenuItem::separator(handle)?;
             let datetime_item = MenuItem::with_id(handle, "edit_datetime", if lang == "ru" { "Время/Дата" } else { "Time/Date" }, true, Some("CmdOrCtrl+Shift+T"))?;
 
@@ -303,6 +317,7 @@ pub fn run() {
                 &find_item,
                 &find_next_item,
                 &replace_item,
+                &goto_item,
                 &sep4,
                 &select_all,
                 &datetime_item,
@@ -354,6 +369,7 @@ pub fn run() {
                     "open" => { emit_to_focused(app, "menu-open", ()); }
                     "save" => { emit_to_focused(app, "menu-save", ()); }
                     "save_as"    => { emit_to_focused(app, "menu-save-as", ()); }
+                    "close_window" => { emit_to_focused(app, "menu-close-window", ()); }
                     "edit_undo"       => { emit_to_focused(app, "menu-edit", "undo"); }
                     "edit_redo"       => { emit_to_focused(app, "menu-edit", "redo"); }
                     "edit_cut"        => { emit_to_focused(app, "menu-edit", "cut"); }
@@ -363,6 +379,7 @@ pub fn run() {
                     "edit_find" => { emit_to_focused(app, "menu-edit", "find"); }
                     "edit_find_next" => { emit_to_focused(app, "menu-edit", "find-next"); }
                     "edit_replace" => { emit_to_focused(app, "menu-edit", "replace"); }
+                    "edit_goto" => { emit_to_focused(app, "menu-edit", "goto"); }
                     "edit_datetime" => { emit_to_focused(app, "menu-edit", "datetime"); }
                     id if id.starts_with("recent-") => {
                         if let Ok(index) = id["recent-".len()..].parse::<usize>() {
@@ -434,6 +451,16 @@ pub fn run() {
 
             Ok(())
         })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let label = window.label().to_string();
+                let confirmed = window.state::<ConfirmedWindowsState>()
+                    .0.lock().unwrap().contains(&label);
+                if confirmed { return; }
+                api.prevent_close();
+                let _ = window.emit("close-requested", ());
+            }
+        })
         .invoke_handler(tauri::generate_handler![
             get_lang,
             open_file,
@@ -445,6 +472,7 @@ pub fn run() {
             set_word_wrap,
             get_status_bar,
             set_status_bar,
+            confirm_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

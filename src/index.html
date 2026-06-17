@@ -14,6 +14,7 @@
     --status-border: #d0d0d0;
     --status-text: #555555;
     --editor-bg: #ffffff;
+    --accent: #007AFF;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -178,6 +179,39 @@
   #find-close { background: none; border: none; color: var(--status-text); cursor: pointer; font-size: 13px; padding: 2px 6px; }
   #find-close:hover { color: var(--text); }
 
+  #gotobar {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 12px;
+    background: var(--status-bg);
+    border-bottom: 1px solid var(--status-border);
+    font-size: 12px;
+    color: var(--text);
+  }
+  #gotobar[hidden] { display: none; }
+  #goto-input {
+    flex: 1;
+    max-width: 200px;
+    padding: 3px 6px;
+    background: var(--editor-bg);
+    color: var(--text);
+    border: 1px solid var(--status-border);
+    border-radius: 4px;
+    font-size: 12px;
+    outline: none;
+    -moz-appearance: textfield;
+  }
+  #goto-input::-webkit-inner-spin-button,
+  #goto-input::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
+  #goto-input:focus { border-color: #4d90fe; }
+  #goto-close { margin-left: auto; background: none; border: none; color: var(--status-text); cursor: pointer; font-size: 13px; padding: 2px 6px; }
+  #goto-close:hover { color: var(--text); }
+
   #statusbar {
     flex-shrink: 0;
     height: 22px;
@@ -197,6 +231,7 @@
     display: flex;
     gap: 12px;
   }
+
 </style>
 </head>
 <body>
@@ -222,6 +257,10 @@
       <button id="replace-all">Заменить всё</button>
     </div>
   </div>
+</div>
+<div id="gotobar" hidden>
+  <input id="goto-input" type="number" min="1" placeholder="Номер строки" spellcheck="false" autocomplete="off">
+  <button id="goto-close" title="Закрыть">✕</button>
 </div>
 <div id="editor-wrap">
   <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
