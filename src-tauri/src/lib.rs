@@ -7,9 +7,9 @@ use tauri::{
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use objc2::rc::autoreleasepool;
-use objc2::MainThreadMarker;
-use objc2_app_kit::{NSAlert, NSAlertStyle};
-use objc2_foundation::NSString;
+use objc2::{AnyThread, MainThreadMarker, MainThreadOnly};
+use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSPrintOperation, NSTextView};
+use objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSPoint, NSRect, NSSize, NSString};
 
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
@@ -267,6 +267,48 @@ async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -
     }
 }
 
+#[tauri::command]
+fn print_document(app: AppHandle, text: String, filename: String) {
+    let _ = app.run_on_main_thread(move || {
+        autoreleasepool(|_| {
+            let mtm = unsafe { MainThreadMarker::new_unchecked() };
+            unsafe {
+                let font_name = NSString::from_str("Menlo");
+                let font = NSFont::fontWithName_size(&font_name, 12.0)
+                    .unwrap_or_else(|| NSFont::userFixedPitchFontOfSize(12.0).unwrap());
+                let ns_text = NSString::from_str(&text);
+                let attr_str = NSAttributedString::from_nsstring(&ns_text);
+                let mut_attr = NSMutableAttributedString::initWithAttributedString(
+                    NSMutableAttributedString::alloc(),
+                    &attr_str,
+                );
+                let full_range = objc2_foundation::NSRange::new(0, ns_text.length());
+                let font_key = NSString::from_str("NSFont");
+                mut_attr.addAttribute_value_range(&font_key, font.as_ref(), full_range);
+                let frame = NSRect::new(NSPoint::new(0.0, 0.0), NSSize::new(468.0, 648.0));
+                let text_view = NSTextView::initWithFrame(NSTextView::alloc(mtm), frame);
+                text_view.textStorage().unwrap().setAttributedString(&mut_attr);
+                let op = NSPrintOperation::printOperationWithView(&text_view);
+                let job_title = NSString::from_str(&filename);
+                op.setJobTitle(Some(&job_title));
+                op.setShowsPrintPanel(true);
+                op.setShowsProgressPanel(true);
+                let key_win = NSApplication::sharedApplication(mtm).keyWindow();
+                if let Some(win) = key_win {
+                    op.runOperationModalForWindow_delegate_didRunSelector_contextInfo(
+                        &win,
+                        None,
+                        None,
+                        std::ptr::null_mut(),
+                    );
+                } else {
+                    op.runOperation();
+                }
+            }
+        });
+    });
+}
+
 struct RecentFilesState(std::sync::Mutex<Vec<String>>);
 struct RecentMenuState(std::sync::Mutex<Option<tauri::menu::Submenu<tauri::Wry>>>);
 struct ConfirmedWindowsState(std::sync::Mutex<std::collections::HashSet<String>>);
@@ -379,6 +421,8 @@ pub fn run() {
             let save_item = MenuItem::with_id(handle, "save", if lang == "ru" { "Сохранить" } else { "Save" }, true, Some("CmdOrCtrl+S"))?;
             let save_as_item = MenuItem::with_id(handle, "save_as", if lang == "ru" { "Сохранить как..." } else { "Save As..." }, true, Some("CmdOrCtrl+Shift+S"))?;
             let sep = PredefinedMenuItem::separator(handle)?;
+            let sep_before_print = PredefinedMenuItem::separator(handle)?;
+            let print_item = MenuItem::with_id(handle, "print", if lang == "ru" { "Печать..." } else { "Print..." }, true, Some("CmdOrCtrl+P"))?;
             let sep_close = PredefinedMenuItem::separator(handle)?;
             let close_item = MenuItem::with_id(handle, "close_window", if lang == "ru" { "Закрыть" } else { "Close" }, true, Some("CmdOrCtrl+W"))?;
 
@@ -390,6 +434,8 @@ pub fn run() {
                 &sep,
                 &save_item,
                 &save_as_item,
+                &sep_before_print,
+                &print_item,
                 &sep_close,
                 &close_item,
             ])?;
@@ -522,6 +568,7 @@ pub fn run() {
                     "open" => { emit_to_focused(app, "menu-open", ()); }
                     "save" => { emit_to_focused(app, "menu-save", ()); }
                     "save_as"    => { emit_to_focused(app, "menu-save-as", ()); }
+                    "print"      => { emit_to_focused(app, "menu-print", ()); }
                     "close_window" => { emit_to_focused(app, "menu-close-window", ()); }
                     "edit_undo"       => { emit_to_focused(app, "menu-edit", "undo"); }
                     "edit_redo"       => { emit_to_focused(app, "menu-edit", "redo"); }
@@ -627,6 +674,7 @@ pub fn run() {
             set_status_bar,
             set_dirty,
             confirm_close,
+            print_document,
             confirm_quit_window,
             cancel_quit,
         ])
