@@ -2,11 +2,12 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Default capabilities for Notepad",
-  "windows": ["main", "win-*"],
+  "windows": ["main", "win-*", "font-panel"],
   "permissions": [
     "core:default",
     "core:window:allow-set-title",
     "core:window:allow-show",
+    "core:window:allow-set-focus",
     "core:window:allow-hide",
     "dialog:allow-open",
     "dialog:allow-save",

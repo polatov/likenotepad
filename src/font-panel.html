@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Шрифт</title>
+<style>
+* { box-sizing: border-box; margin: 0; padding: 0; }
+body {
+  font-family: -apple-system, sans-serif;
+  font-size: 12px;
+  overflow: hidden;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 12px 10px;
+  gap: 8px;
+  -webkit-user-select: none;
+}
+:root {
+  --border: #c0c0c0;
+  --list-bg: #fff;
+  --input-bg: #fff;
+  --hover: rgba(0,113,227,0.10);
+  --btn-bg: #e5e5e5;
+  --btn-hover: #d8d8d8;
+  --preview-bg: #fff;
+  --select-bg: #fff;
+}
+.columns {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+.col { display: flex; flex-direction: column; gap: 3px; min-height: 0; }
+.col-font { flex: 1; min-width: 0; }
+.col-face { width: 128px; flex-shrink: 0; }
+.col-size { width: 68px; flex-shrink: 0; }
+.col-label { font-size: 11px; font-weight: 500; padding-bottom: 1px; }
+input[type=text], input[type=number] {
+  width: 100%;
+  padding: 3px 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  outline: none;
+  background: var(--input-bg);
+  color: inherit;
+  flex-shrink: 0;
+}
+input[readonly] { cursor: default; }
+input:focus,
+.script-row select:focus {
+  outline: 2px solid #0071e3 !important;
+  outline-offset: -1px;
+}
+ul {
+  list-style: none;
+  flex: 1;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--list-bg);
+  min-height: 0;
+}
+ul:focus {
+  outline: 2px solid #0071e3;
+  outline-offset: -1px;
+}
+li {
+  padding: 2px 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: default;
+  font-size: 12px;
+  color: inherit;
+}
+li:hover  { background: var(--hover); }
+li.active { background: #0071e3; color: #fff; }
+.script-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.script-row label { font-size: 11px; font-weight: 500; white-space: nowrap; }
+.script-row select {
+  flex: 1;
+  padding: 3px 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--select-bg);
+  color: inherit;
+  outline: none;
+}
+.preview-label { font-size: 11px; font-weight: 500; flex-shrink: 0; }
+.preview-box {
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--preview-bg);
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.btn-row {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-shrink: 0;
+}
+.btn {
+  padding: 4px 18px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--btn-bg);
+  color: inherit;
+  cursor: pointer;
+  min-width: 64px;
+}
+.btn:hover { background: var(--btn-hover); }
+.btn-ok { font-weight: 600; }
+body.theme-light {
+  background: #ececec;
+  color: #000;
+}
+body.theme-dark {
+  background: #2c2c2e;
+  color: #e8e8e8;
+  --border: #555;
+  --list-bg: #3a3a3c;
+  --input-bg: #3a3a3c;
+  --hover: rgba(255,255,255,0.07);
+  --btn-bg: #48484a;
+  --btn-hover: #58585a;
+  --preview-bg: #3a3a3c;
+  --select-bg: #3a3a3c;
+}
+</style>
+</head>
+<body>
+
+<div class="columns">
+  <div class="col col-font">
+    <div class="col-label">Шрифт:</div>
+    <input type="text" id="font-search" placeholder="Поиск"
+           autocomplete="off" spellcheck="false" tabindex="1">
+    <ul id="font-families" tabindex="-1"></ul>
+  </div>
+  <div class="col col-face">
+    <div class="col-label">Начертание:</div>
+    <input type="text" id="face-display" tabindex="2" autocomplete="off" spellcheck="false">
+    <ul id="font-faces" tabindex="-1"></ul>
+  </div>
+  <div class="col col-size">
+    <div class="col-label">Размер:</div>
+    <input type="number" id="size-input" min="6" max="144" tabindex="3">
+    <ul id="font-sizes" tabindex="-1"></ul>
+  </div>
+</div>
+
+<div class="script-row">
+  <label for="script-select">Набор:</label>
+  <select id="script-select" tabindex="4">
+    <option value="all">Все шрифты</option>
+    <option value="monospaced">Моноширинные</option>
+    <option value="serif">С засечками</option>
+    <option value="sans">Без засечек</option>
+    <option value="russian">Русский (кириллица)</option>
+  </select>
+</div>
+
+<div class="preview-label">Образец</div>
+<div class="preview-box" id="preview">AaBbЯяZz</div>
+
+<div class="btn-row">
+  <button class="btn" id="btn-cancel" tabindex="5">Отмена</button>
+  <button class="btn btn-ok" id="btn-ok" tabindex="6">OK</button>
+</div>
+
+<script>
+(function() {
+  const invoke = window.__TAURI__.core.invoke;
+  const { getCurrentWindow } = window.__TAURI__.window;
+
+  // Тема из URL-параметра
+  const params = new URLSearchParams(window.location.search);
+  const theme = params.get("theme") || "auto";
+  const isDark = theme === "dark" ||
+    (theme === "auto" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+  document.body.classList.add(isDark ? "theme-dark" : "theme-light");
+
+  const SIZES = [8,9,10,11,12,14,16,18,20,22,24,26,28,36,48,72];
+  const SERIF = new Set([
+    "Times New Roman","Georgia","Palatino","Garamond","Didot","Baskerville",
+    "Hoefler Text","Big Caslon","Bodoni 72","Bodoni 72 Oldstyle","Bodoni 72 Smallcaps",
+    "Cochin","Copperplate","Optima","Rockwell","Rockwell Extra Bold",
+    "Superclarendon","Charter","Times","New York"
+  ]);
+
+  let fontList = [];
+  let curFamily = "Menlo", origFamily = "Menlo";
+  let curFace = "Regular", origFace = "Regular";
+  let curWeight = "normal", origWeight = "normal";
+  let curStyle = "normal", origStyle = "normal";
+  let curSize = 13, origSize = 13;
+  let russianCache = null;
+  let currentScript = "all";
+  let userTyping = false;
+
+  function buildRussianCache() {
+    if (russianCache) return;
+    russianCache = new Set();
+    const canvas = document.createElement("canvas");
+    canvas.width = 20; canvas.height = 20;
+    const ctx = canvas.getContext("2d");
+    ctx.font = "16px monospace";
+    ctx.fillText("Я", 0, 16);
+    const mono = ctx.getImageData(0,0,20,20).data.toString();
+    for (const f of fontList) {
+      ctx.clearRect(0,0,20,20);
+      ctx.font = '16px "' + f.family + '", monospace';
+      ctx.fillText("Я", 0, 16);
+      const d = ctx.getImageData(0,0,20,20).data.toString();
+      if (d !== mono) russianCache.add(f.family);
+    }
+  }
+
+  function getFilteredList() {
+    const q = userTyping
+      ? document.getElementById("font-search").value.toLowerCase()
+      : "";
+    let list = fontList;
+    if (currentScript === "monospaced") list = fontList.filter(f => f.monospaced);
+    else if (currentScript === "serif")  list = fontList.filter(f => SERIF.has(f.family));
+    else if (currentScript === "sans")   list = fontList.filter(f => !f.monospaced && !SERIF.has(f.family));
+    else if (currentScript === "russian") { buildRussianCache(); list = fontList.filter(f => russianCache.has(f.family)); }
+    return q ? list.filter(f => f.family.toLowerCase().includes(q)) : list;
+  }
+
+  function renderFamilies() {
+    const ul = document.getElementById("font-families");
+    const list = getFilteredList();
+    ul.innerHTML = "";
+    let activeEl = null;
+    for (const f of list) {
+      const li = document.createElement("li");
+      li.textContent = f.family;
+      li.style.fontFamily = '"' + f.family + '"';
+      if (f.family === curFamily) { li.classList.add("active"); activeEl = li; }
+      li.addEventListener("click", function() { selectFamily(f.family); });
+      ul.appendChild(li);
+    }
+    if (activeEl) setTimeout(function() { activeEl.scrollIntoView({block:"nearest"}); }, 0);
+    renderFaces();
+  }
+
+  function renderFaces() {
+    const ul = document.getElementById("font-faces");
+    ul.innerHTML = "";
+    const fam = fontList.find(function(f) { return f.family === curFamily; });
+    if (!fam) return;
+    for (const face of fam.faces) {
+      const li = document.createElement("li");
+      li.textContent = face.name;
+      li.style.fontFamily = '"' + curFamily + '"';
+      li.style.fontWeight = face.weight;
+      li.style.fontStyle  = face.style;
+      if (face.name === curFace) li.classList.add("active");
+      li.addEventListener("click", function() { selectFace(face.name, face.weight, face.style); });
+      ul.appendChild(li);
+    }
+    document.getElementById("face-display").value = curFace;
+    updatePreview();
+  }
+
+  function renderSizes() {
+    const ul = document.getElementById("font-sizes");
+    ul.innerHTML = "";
+    for (const s of SIZES) {
+      const li = document.createElement("li");
+      li.textContent = s;
+      if (s === curSize) li.classList.add("active");
+      li.addEventListener("click", function() { selectSize(s); });
+      ul.appendChild(li);
+    }
+    const active = ul.querySelector(".active");
+    if (active) setTimeout(function() { active.scrollIntoView({block:"nearest"}); }, 0);
+    document.getElementById("size-input").value = curSize;
+  }
+
+  function selectFamily(family) {
+    curFamily = family;
+    const fam = fontList.find(function(f) { return f.family === family; });
+    if (fam && fam.faces.length) {
+      const reg = fam.faces.find(function(f) { return f.weight==="normal" && f.style==="normal"; }) || fam.faces[0];
+      curFace = reg.name; curWeight = reg.weight; curStyle = reg.style;
+    }
+    // Очищаем поле поиска и проставляем имя семьи (не считается ручным вводом)
+    userTyping = false;
+    document.getElementById("font-search").value = family;
+    renderFamilies();
+    previewFont();
+  }
+
+  function selectFace(name, weight, style) {
+    curFace = name; curWeight = weight; curStyle = style;
+    renderFaces();
+    previewFont();
+  }
+
+  function selectSize(size) {
+    curSize = size;
+    document.getElementById("size-input").value = size;
+    renderSizes();
+    previewFont();
+  }
+
+  function previewFont() {
+    updatePreview();
+    invoke("preview_font", { name: curFamily, size: curSize, weight: curWeight, style: curStyle });
+  }
+
+  function updatePreview() {
+    const p = document.getElementById("preview");
+    p.style.fontFamily = '"' + curFamily + '"';
+    p.style.fontWeight = curWeight;
+    p.style.fontStyle  = curStyle;
+    p.style.fontSize   = Math.min(Math.max(curSize * 1.4, 18), 36) + "px";
+  }
+
+  async function doOk() {
+    await invoke("apply_font_and_close", {
+      name: curFamily, size: curSize, weight: curWeight, style: curStyle
+    });
+  }
+
+  async function doCancel() {
+    const logs = [];
+    function log(msg) {
+      logs.push(new Date().toISOString().slice(11,23) + " " + msg);
+      try { localStorage.setItem("cancel_log", logs.join("\n")); } catch(e) {}
+    }
+    log("cancel start, orig=" + origFamily + " " + origSize + " " + origWeight + " " + origStyle);
+    try {
+      await invoke("preview_font", {
+        name: origFamily, size: origSize, weight: origWeight, style: origStyle
+      });
+      log("preview_font OK");
+    } catch (e) {
+      log("preview_font ERR: " + e);
+    }
+    try {
+      log("calling apply_font_and_close");
+      await invoke("apply_font_and_close", {
+        name: origFamily, size: origSize, weight: origWeight, style: origStyle
+      });
+      log("apply_font_and_close OK");
+    } catch (e) {
+      log("apply ERR: " + e);
+    }
+  }
+
+  document.getElementById("btn-ok").addEventListener("click", doOk);
+  document.getElementById("btn-cancel").addEventListener("click", doCancel);
+
+  document.getElementById("font-search").addEventListener("input", function() {
+    userTyping = true;
+    renderFamilies();
+  });
+
+  document.getElementById("face-display").addEventListener("keydown", function(e) {
+    // Запрещаем ввод цифр
+    if (e.key >= "0" && e.key <= "9") {
+      e.preventDefault();
+    }
+  });
+
+  document.getElementById("face-display").addEventListener("input", function(e) {
+    // Ищем подходящее начертание у текущего семейства
+    const q = e.target.value.toLowerCase();
+    const fam = fontList.find(function(f) { return f.family === curFamily; });
+    if (!fam) return;
+    const match = fam.faces.find(function(f) { return f.name.toLowerCase().startsWith(q); });
+    if (match) {
+      // Не вызываем selectFace полностью, чтобы не сбивать ввод;
+      // обновляем только активность в списке и подгружаем превью
+      curFace = match.name;
+      curWeight = match.weight;
+      curStyle = match.style;
+      // Перерисовка списка начертаний без сброса значения input
+      const ul = document.getElementById("font-faces");
+      ul.querySelectorAll("li").forEach(function(li) {
+        li.classList.toggle("active", li.textContent === match.name);
+      });
+      const active = ul.querySelector(".active");
+      if (active) active.scrollIntoView({ block: "nearest" });
+      previewFont();
+    }
+  });
+
+  document.getElementById("size-input").addEventListener("change", function(e) {
+    const val = Math.max(6, Math.min(144, parseInt(e.target.value) || 13));
+    e.target.value = val;
+    selectSize(val);
+  });
+
+  document.getElementById("script-select").addEventListener("change", function(e) {
+    currentScript = e.target.value;
+    renderFamilies();
+  });
+
+  document.addEventListener("keydown", function(e) {
+    if (e.key === "Escape") doCancel();
+    if (e.key === "Enter" && document.activeElement.tagName !== "INPUT") doOk();
+  });
+
+  // Init
+  invoke("get_font_list").then(function(list) {
+    fontList = list;
+    return invoke("get_font");
+  }).then(function(font) {
+    origFamily = curFamily = font[0];
+    origSize   = curSize   = font[1];
+    origWeight = curWeight = font[2];
+    origStyle  = curStyle  = font[3];
+    const fam = fontList.find(function(f) { return f.family === curFamily; });
+    if (fam) {
+      const m = fam.faces.find(function(f) { return f.weight===curWeight && f.style===curStyle; });
+      origFace = curFace = m ? m.name : (fam.faces[0] ? fam.faces[0].name : "");
+    }
+    document.getElementById("size-input").value = curSize;
+    renderSizes();
+    renderFamilies();
+    document.getElementById("font-search").value = curFamily;
+    getCurrentWindow().show();
+    getCurrentWindow().setFocus();
+    // Начальный фокус на поле "Шрифт" с выделением текста
+    setTimeout(function() {
+      const inp = document.getElementById("font-search");
+      inp.focus();
+      inp.select();
+    }, 80);
+  });
+  // ── Навигация стрелками ──
+  function arrowNav(inputId, listSelector, getItems, applyIndex) {
+    const input = document.getElementById(inputId);
+    input.addEventListener("keydown", function(e) {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const items = getItems();
+      if (!items.length) return;
+      let idx = items.findIndex(function(x) { return x.active; });
+      if (idx === -1) idx = 0;
+      else idx = e.key === "ArrowDown"
+        ? Math.min(items.length - 1, idx + 1)
+        : Math.max(0, idx - 1);
+      applyIndex(idx);
+    });
+  }
+
+  // Стрелки в поле "Шрифт" двигают по списку семейств
+  arrowNav("font-search", "#font-families",
+    function() {
+      return Array.from(document.querySelectorAll("#font-families li"))
+        .map(function(li){ return { family: li.textContent, active: li.classList.contains("active") }; });
+    },
+    function(idx) {
+      const items = Array.from(document.querySelectorAll("#font-families li"));
+      const family = items[idx].textContent;
+      selectFamily(family);
+      const newActive = document.querySelector("#font-families li.active");
+      if (newActive) newActive.scrollIntoView({ block: "nearest" });
+      document.getElementById("font-search").value = family;
+      const inp = document.getElementById("font-search");
+      userTyping = false;
+      inp.setSelectionRange(family.length, family.length);
+    }
+  );
+
+  // Стрелки в поле "Начертание"
+  arrowNav("face-display", "#font-faces",
+    function() {
+      return Array.from(document.querySelectorAll("#font-faces li"))
+        .map(function(li){ return { name: li.textContent, active: li.classList.contains("active") }; });
+    },
+    function(idx) {
+      const fam = fontList.find(function(f){ return f.family === curFamily; });
+      if (!fam) return;
+      const face = fam.faces[idx];
+      selectFace(face.name, face.weight, face.style);
+      const newActive = document.querySelector("#font-faces li.active");
+      if (newActive) newActive.scrollIntoView({ block: "nearest" });
+    }
+  );
+
+  // Стрелки в поле "Размер"
+  arrowNav("size-input", "#font-sizes",
+    function() {
+      return Array.from(document.querySelectorAll("#font-sizes li"))
+        .map(function(li){ return { size: parseInt(li.textContent), active: li.classList.contains("active") }; });
+    },
+    function(idx) {
+      const items = Array.from(document.querySelectorAll("#font-sizes li"));
+      const sz = parseInt(items[idx].textContent);
+      selectSize(sz);
+      const newActive = document.querySelector("#font-sizes li.active");
+      if (newActive) newActive.scrollIntoView({ block: "nearest" });
+    }
+  );
+
+  // ── Стрелки в самих списках ──
+  function listArrowNav(listId, onSelect) {
+    const ul = document.getElementById(listId);
+    ul.addEventListener("keydown", function(e) {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      e.preventDefault();
+      const items = Array.from(ul.querySelectorAll("li"));
+      if (!items.length) return;
+      let idx = items.findIndex(function(li) { return li.classList.contains("active"); });
+      if (idx === -1) idx = 0;
+      else idx = e.key === "ArrowDown"
+        ? Math.min(items.length - 1, idx + 1)
+        : Math.max(0, idx - 1);
+      onSelect(items[idx]);
+    });
+  }
+
+  listArrowNav("font-families", function(li) {
+    selectFamily(li.textContent);
+    const a = document.querySelector("#font-families li.active");
+    if (a) a.scrollIntoView({ block: "nearest" });
+    document.getElementById("font-families").focus();
+  });
+
+  listArrowNav("font-faces", function(li) {
+    const fam = fontList.find(function(f){ return f.family === curFamily; });
+    if (!fam) return;
+    const face = fam.faces.find(function(f) { return f.name === li.textContent; });
+    if (!face) return;
+    selectFace(face.name, face.weight, face.style);
+    const a = document.querySelector("#font-faces li.active");
+    if (a) a.scrollIntoView({ block: "nearest" });
+    document.getElementById("font-faces").focus();
+  });
+
+  listArrowNav("font-sizes", function(li) {
+    selectSize(parseInt(li.textContent));
+    const a = document.querySelector("#font-sizes li.active");
+    if (a) a.scrollIntoView({ block: "nearest" });
+    document.getElementById("font-sizes").focus();
+  });
+
+})();
+</script>
+</body>
+</html>

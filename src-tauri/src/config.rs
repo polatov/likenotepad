@@ -9,6 +9,10 @@ pub struct Config {
     pub last_dir: Option<String>,
     pub word_wrap: bool,
     pub status_bar: bool,
+    pub font_name: String,
+    pub font_size: f64,
+    pub font_weight: String,
+    pub font_style: String,
 }
 
 impl Default for Config {
@@ -19,6 +23,10 @@ impl Default for Config {
             last_dir: None,
             word_wrap: false,
             status_bar: true,
+            font_name: "Menlo".to_string(),
+            font_size: 13.0,
+            font_weight: "normal".to_string(),
+            font_style: "normal".to_string(),
         }
     }
 }

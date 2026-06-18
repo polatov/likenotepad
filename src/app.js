@@ -405,6 +405,15 @@ async function init() {
       } catch (e) {
         console.error("get_status_bar:", e);
       }
+      try {
+        const [fontName, fontSize, fontWeight, fontStyle] = await invoke("get_font");
+        editor.style.fontFamily = `"${fontName}", monospace`;
+        editor.style.fontSize = `${fontSize}px`;
+        editor.style.fontWeight = fontWeight;
+        editor.style.fontStyle = fontStyle;
+      } catch (e) {
+        console.error("get_font:", e);
+      }
     } finally {
       try {
         await getCurrentWindow().show();
@@ -417,6 +426,16 @@ async function init() {
     await listen("menu-open", openFile);
     await listen("menu-save", saveFile);
     await listen("menu-save-as", saveFileAs);
+    await listen("menu-font-panel", async () => {
+      await openFontPanel();
+    });
+    await listen("font-changed", (event) => {
+      const [name, size, weight, style] = event.payload;
+      editor.style.fontFamily = `"${name}", monospace`;
+      editor.style.fontSize = `${size}px`;
+      editor.style.fontWeight = weight;
+      editor.style.fontStyle = style;
+    });
     await listen("menu-page-setup", async () => {
       await invoke("page_setup");
     });
@@ -520,3 +539,10 @@ setTimeout(() => {
   if (windowShown) return;
   try { getCurrentWindow().show(); windowShown = true; } catch (e) {}
 }, 1500);
+
+// ─── Font Panel ───────────────────────────────────────────────────────────────
+
+async function openFontPanel() {
+  await invoke("open_font_panel");
+}
+

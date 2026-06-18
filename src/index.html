@@ -15,6 +15,11 @@
     --status-text: #555555;
     --editor-bg: #ffffff;
     --accent: #007AFF;
+    --panel-bg: #f0f0f0;
+    --panel-border: #d0d0d0;
+    --input-bg: #ffffff;
+    --hover-bg: rgba(0,0,0,0.06);
+    --text-secondary: #888888;
   }
 
   @media (prefers-color-scheme: dark) {
@@ -25,6 +30,11 @@
       --status-border: #3a3a3a;
       --status-text: #888888;
       --editor-bg: #1e1e1e;
+      --panel-bg: #252526;
+      --panel-border: #3a3a3a;
+      --input-bg: #1e1e1e;
+      --hover-bg: rgba(255,255,255,0.06);
+      --text-secondary: #888888;
     }
   }
 
@@ -35,6 +45,11 @@
     --status-border: #3a3a3a;
     --status-text: #888888;
     --editor-bg: #1e1e1e;
+    --panel-bg: #252526;
+    --panel-border: #3a3a3a;
+    --input-bg: #1e1e1e;
+    --hover-bg: rgba(255,255,255,0.06);
+    --text-secondary: #888888;
   }
 
   html, body {
@@ -232,6 +247,188 @@
     gap: 12px;
   }
 
+  /* ── Font Panel (floating) ── */
+  #font-panel {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 680px;
+    height: 300px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 10px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+    z-index: 200;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .font-panel-titlebar {
+    display: flex;
+    align-items: center;
+    padding: 6px 10px;
+    background: var(--panel-titlebar-bg, var(--panel-bg));
+    border-bottom: 1px solid var(--panel-border);
+    cursor: grab;
+    flex-shrink: 0;
+    user-select: none;
+  }
+  .font-panel-titlebar:active { cursor: grabbing; }
+  .font-panel-title {
+    flex: 1;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--text);
+    text-align: center;
+  }
+  .font-panel-close-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 13px;
+    color: var(--text-secondary, #888);
+    padding: 0 2px;
+    line-height: 1;
+  }
+  .font-panel-close-btn:hover { color: var(--text); }
+
+  .font-panel-body {
+    display: flex;
+    flex-direction: row;
+    flex: 1;
+    padding: 6px 8px;
+    gap: 6px;
+    overflow: hidden;
+    box-sizing: border-box;
+  }
+
+  .font-col {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+  .font-col-label {
+    font-size: 11px;
+    color: var(--text-secondary, #888);
+    padding: 0 4px 3px 4px;
+    flex-shrink: 0;
+  }
+  .font-col-collections { width: 120px; flex-shrink: 0; }
+  .font-col-families    { flex: 1; min-width: 0; }
+  .font-col-faces       { width: 130px; flex-shrink: 0; }
+  .font-preview-col {
+    width: 140px;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+  }
+
+  #font-collections,
+  #font-families,
+  #font-faces {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    overflow-y: auto;
+    flex: 1;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    background: var(--input-bg, var(--bg));
+  }
+  .font-collection-item,
+  .font-family-item,
+  .font-face-item {
+    padding: 3px 8px;
+    font-size: 12px;
+    cursor: default;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--text);
+  }
+  .font-collection-item:hover,
+  .font-family-item:hover,
+  .font-face-item:hover  { background: var(--hover-bg, rgba(0,0,0,0.06)); }
+  .font-collection-item.active,
+  .font-family-item.active,
+  .font-face-item.active {
+    background: var(--accent, #0071e3);
+    color: #fff;
+  }
+
+  .font-search-wrap { flex-shrink: 0; padding-bottom: 4px; }
+  #font-search {
+    width: 100%;
+    box-sizing: border-box;
+    padding: 3px 7px;
+    font-size: 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    background: var(--input-bg, var(--bg));
+    color: var(--text);
+    outline: none;
+  }
+
+  .font-size-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding-top: 6px;
+    flex-shrink: 0;
+  }
+  .font-size-row label { font-size: 11px; color: var(--text-secondary,#888); flex-shrink:0; }
+  #font-size-range { flex: 1; min-width: 0; }
+  #font-size-input {
+    width: 40px;
+    padding: 2px 4px;
+    font-size: 12px;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    background: var(--input-bg, var(--bg));
+    color: var(--text);
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  #font-preview {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 1px solid var(--panel-border);
+    border-radius: 4px;
+    background: var(--input-bg, var(--bg));
+    color: var(--text);
+    overflow: hidden;
+    padding: 4px;
+    text-align: center;
+    word-break: break-all;
+  }
+
+  .font-fav-row {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    flex-shrink: 0;
+  }
+  #font-fav-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 18px;
+    padding: 0;
+    line-height: 1;
+    color: var(--text);
+  }
+  #font-fav-label {
+    font-size: 11px;
+    color: var(--text-secondary, #888);
+  }
+
 </style>
 </head>
 <body>
@@ -273,6 +470,7 @@
     <span id="stat-chars"></span>
   </div>
 </div>
+
 
 <script type="module" src="app.js"></script>
 </body>

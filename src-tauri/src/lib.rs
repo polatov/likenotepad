@@ -6,10 +6,42 @@ use tauri::{
     AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
-use objc2::rc::autoreleasepool;
-use objc2::{AnyThread, MainThreadMarker, MainThreadOnly};
-use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSPageLayout, NSPrintOperation, NSTextView};
+use objc2::define_class;
+use objc2::rc::{autoreleasepool, Retained};
+use objc2::runtime::NSObject;
+use objc2::{AnyThread, ClassType, MainThreadMarker, MainThreadOnly};
+use std::sync::OnceLock;
+use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSFontManager, NSPageLayout, NSPrintOperation, NSTextView};
 use objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSPoint, NSRect, NSSize, NSString};
+
+define_class!(
+    #[unsafe(super(NSObject))]
+    #[name = "FontChangeTarget"]
+    struct FontChangeTarget;
+
+    impl FontChangeTarget {
+        #[unsafe(method(changeFont:))]
+        fn change_font(&self, _sender: Option<&NSFontManager>) {
+            FONT_CHANGE_CALLBACK.with(|cb| {
+                if let Some(f) = cb.borrow().as_ref() {
+                    f();
+                }
+            });
+        }
+
+    }
+);
+
+unsafe impl Send for FontChangeTarget {}
+unsafe impl Sync for FontChangeTarget {}
+
+thread_local! {
+    static FONT_CHANGE_CALLBACK: std::cell::RefCell<Option<Box<dyn Fn()>>> =
+        std::cell::RefCell::new(None);
+}
+
+static FONT_TARGET: OnceLock<std::sync::Mutex<Option<Retained<FontChangeTarget>>>> =
+    OnceLock::new();
 
 static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 
@@ -160,6 +192,189 @@ fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
     let mut cfg = config::load(&app);
     cfg.theme = theme;
     config::save(&app, &cfg)
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct FontFaceInfo {
+    pub name: String,
+    pub weight: String,
+    pub style: String,
+}
+
+#[derive(serde::Serialize, Clone)]
+pub struct FontFamilyInfo {
+    pub family: String,
+    pub faces: Vec<FontFaceInfo>,
+    pub monospaced: bool,
+}
+
+#[tauri::command]
+fn get_font(app: tauri::AppHandle) -> (String, f64, String, String) {
+    let cfg = config::load(&app);
+    (cfg.font_name, cfg.font_size, cfg.font_weight, cfg.font_style)
+}
+
+#[tauri::command]
+fn set_font(app: tauri::AppHandle, name: String, size: f64, weight: String, style: String) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.font_name = name.clone();
+    cfg.font_size = size;
+    cfg.font_weight = weight.clone();
+    cfg.font_style = style.clone();
+    config::save(&app, &cfg)?;
+    app.emit("font-changed", (name, size, weight, style))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn apply_font_and_close(
+    app: tauri::AppHandle,
+    name: String,
+    size: f64,
+    weight: String,
+    style: String,
+) -> Result<(), String> {
+    // 1) Сохраняем в конфиг и эмитим font-changed
+    {
+        let mut cfg = config::load(&app);
+        cfg.font_name = name.clone();
+        cfg.font_size = size;
+        cfg.font_weight = weight.clone();
+        cfg.font_style = style.clone();
+        config::save(&app, &cfg)?;
+        app.emit("font-changed", (name, size, weight, style))
+            .map_err(|e| e.to_string())?;
+    }
+
+    // 2) Закрываем окно отдельной задачей, чтобы не падать в текущей invoke
+    let app_clone = app.clone();
+    tauri::async_runtime::spawn(async move {
+        // Небольшая задержка, чтобы текущий invoke и эмит точно завершились
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+        if let Some(win) = app_clone.get_webview_window("font-panel") {
+            let _ = win.close();
+        }
+    });
+    Ok(())
+}
+
+#[tauri::command]
+async fn preview_font(
+    app: tauri::AppHandle,
+    name: String,
+    size: f64,
+    weight: String,
+    style: String,
+) -> Result<(), String> {
+    app.emit("font-changed", (name, size, weight, style))
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_font_list(app: tauri::AppHandle) -> Result<Vec<FontFamilyInfo>, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<Vec<FontFamilyInfo>>();
+    app.run_on_main_thread(move || {
+        let result = autoreleasepool(|_| {
+            let mtm = unsafe { MainThreadMarker::new_unchecked() };
+            let fm = NSFontManager::sharedFontManager(mtm);
+            let families = fm.availableFontFamilies();
+
+            let mut list: Vec<FontFamilyInfo> = Vec::new();
+
+            for family_ns in families.iter() {
+                let family_str = family_ns.to_string();
+                let mut faces: Vec<FontFaceInfo> = Vec::new();
+                let mut is_monospaced = false;
+
+                if let Some(members) = fm.availableMembersOfFontFamily(&family_ns) {
+                    let count: usize = unsafe { objc2::msg_send![&*members, count] };
+                    for i in 0..count {
+                        unsafe {
+                            let member: *mut objc2::runtime::AnyObject =
+                                objc2::msg_send![&*members, objectAtIndex: i];
+                            if member.is_null() { continue; }
+
+                            let face_obj: *mut objc2_foundation::NSString =
+                                objc2::msg_send![member, objectAtIndex: 1usize];
+                            let traits_obj: *mut objc2::runtime::AnyObject =
+                                objc2::msg_send![member, objectAtIndex: 3usize];
+                            if face_obj.is_null() || traits_obj.is_null() { continue; }
+
+                            let face_name = (*face_obj).to_string();
+                            let traits: u32 = objc2::msg_send![traits_obj, unsignedIntValue];
+
+                            if traits & 0x0400 != 0 { is_monospaced = true; }
+                            let weight = if traits & 0x0002 != 0 { "bold" } else { "normal" };
+                            let style  = if traits & 0x0001 != 0 { "italic" } else { "normal" };
+
+                            faces.push(FontFaceInfo {
+                                name: face_name,
+                                weight: weight.to_string(),
+                                style: style.to_string(),
+                            });
+                        }
+                    }
+                }
+
+                if !faces.is_empty() {
+                    list.push(FontFamilyInfo {
+                        family: family_str,
+                        faces,
+                        monospaced: is_monospaced,
+                    });
+                }
+            }
+
+            list.sort_by(|a, b| a.family.to_lowercase().cmp(&b.family.to_lowercase()));
+            list
+        });
+
+        let _ = tx.send(result);
+    }).map_err(|e| e.to_string())?;
+
+    rx.await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn open_font_panel(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("font-panel") {
+        win.show().map_err(|e| e.to_string())?;
+        win.set_focus().map_err(|e| e.to_string())?;
+        return Ok(());
+    }
+
+    let theme = config::load(&app).theme;
+    let url_str = format!("font-panel.html?theme={}", theme);
+
+    let mut builder = tauri::WebviewWindowBuilder::new(
+        &app,
+        "font-panel",
+        tauri::WebviewUrl::App(std::path::PathBuf::from(url_str)),
+    )
+    .title("Шрифт")
+    .inner_size(460.0, 380.0)
+    .resizable(false)
+    .minimizable(false)
+    .visible(false);
+
+    if let Some(parent) = app.webview_windows()
+        .into_iter()
+        .find(|(label, w)| label != "font-panel" && w.is_focused().unwrap_or(false))
+        .map(|(_, w)| w)
+    {
+        builder = builder.parent(&parent).map_err(|e| e.to_string())?;
+    }
+
+    builder.build().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn close_font_panel(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("font-panel") {
+        win.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -316,6 +531,63 @@ fn page_setup(app: AppHandle) {
             let mtm = unsafe { MainThreadMarker::new_unchecked() };
             let layout = NSPageLayout::pageLayout(mtm);
             layout.runModal();
+        });
+    });
+}
+
+#[tauri::command]
+fn show_font_panel(app: tauri::AppHandle) {
+    let cfg = config::load(&app);
+    let font_name = cfg.font_name.clone();
+    let font_size = cfg.font_size;
+    let app2 = app.clone();
+    let _ = app.run_on_main_thread(move || {
+        autoreleasepool(|_| {
+            let mtm = unsafe { MainThreadMarker::new_unchecked() };
+            unsafe {
+                let fm = NSFontManager::sharedFontManager(mtm);
+
+                let store = FONT_TARGET.get_or_init(|| std::sync::Mutex::new(None));
+                let mut guard = store.lock().unwrap();
+                if guard.is_none() {
+                    *guard = Some(objc2::msg_send![FontChangeTarget::class(), new]);
+                }
+                let target = guard.as_ref().unwrap();
+
+                fm.setTarget(Some(target.as_ref()));
+
+                let app3 = app2.clone();
+                FONT_CHANGE_CALLBACK.with(|cb| {
+                    *cb.borrow_mut() = Some(Box::new(move || {
+                        let mtm2 = MainThreadMarker::new_unchecked();
+                        let fm2 = NSFontManager::sharedFontManager(mtm2);
+                        if let Some(font) = fm2.selectedFont() {
+                            let new_name = font.familyName()
+                                .map(|s| s.to_string())
+                                .unwrap_or_else(|| "Menlo".to_string());
+                            let new_size = font.pointSize();
+                            let traits = fm2.traitsOfFont(&font);
+                            let is_bold = traits & objc2_app_kit::NSFontTraitMask(2) != objc2_app_kit::NSFontTraitMask(0);
+                            let is_italic = traits & objc2_app_kit::NSFontTraitMask(1) != objc2_app_kit::NSFontTraitMask(0);
+                            let new_weight = if is_bold { "bold" } else { "normal" }.to_string();
+                            let new_style = if is_italic { "italic" } else { "normal" }.to_string();
+                            let mut cfg2 = config::load(&app3);
+                            cfg2.font_name = new_name.clone();
+                            cfg2.font_size = new_size;
+                            cfg2.font_weight = new_weight.clone();
+                            cfg2.font_style = new_style.clone();
+                            let _ = config::save(&app3, &cfg2);
+                            let _ = app3.emit("font-changed", (&new_name, new_size, &new_weight, &new_style));
+                        }
+                    }));
+                });
+
+                let ns_name = NSString::from_str(&font_name);
+                if let Some(font) = NSFont::fontWithName_size(&ns_name, font_size) {
+                    fm.setSelectedFont_isMultiple(&font, false);
+                }
+                fm.orderFrontFontPanel(None);
+            }
         });
     });
 }
@@ -516,8 +788,10 @@ pub fn run() {
             let status_state = std::sync::Arc::new(AtomicBool::new(saved_status));
             let status_state_menu = status_state.clone();
 
+            let font_panel_item = MenuItem::with_id(handle, "font_panel", if lang == "ru" { "Шрифт\u{2026}" } else { "Font\u{2026}" }, true, Some("cmd+t"))?;
+            let sep_format = PredefinedMenuItem::separator(handle)?;
             let format_label = if lang == "ru" { "Формат" } else { "Format" };
-            let format_menu = Submenu::with_items(handle, format_label, true, &[&wrap_item])?;
+            let format_menu = Submenu::with_items(handle, format_label, true, &[&font_panel_item, &sep_format, &wrap_item])?;
 
             let help_label = if lang == "ru" { "Справка" } else { "Help" };
             let help_menu = Submenu::with_id_and_items(handle, HELP_SUBMENU_ID, help_label, true, &[])?;
@@ -584,6 +858,7 @@ pub fn run() {
                     "page_setup" => { emit_to_focused(app, "menu-page-setup", ()); }
                     "print"      => { emit_to_focused(app, "menu-print", ()); }
                     "close_window" => { emit_to_focused(app, "menu-close-window", ()); }
+                    "font_panel" => { emit_to_focused(app, "menu-font-panel", ()); }
                     "edit_undo"       => { emit_to_focused(app, "menu-edit", "undo"); }
                     "edit_redo"       => { emit_to_focused(app, "menu-edit", "redo"); }
                     "edit_cut"        => { emit_to_focused(app, "menu-edit", "cut"); }
@@ -667,6 +942,9 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "font-panel" {
+                    return;
+                }
                 let label = window.label().to_string();
                 let confirmed = window.state::<ConfirmedWindowsState>()
                     .0.lock().unwrap().contains(&label);
@@ -682,6 +960,13 @@ pub fn run() {
             save_file_as,
             get_theme,
             set_theme,
+            get_font,
+            set_font,
+            apply_font_and_close,
+            preview_font,
+            get_font_list,
+            open_font_panel,
+            close_font_panel,
             get_word_wrap,
             set_word_wrap,
             get_status_bar,
@@ -690,6 +975,7 @@ pub fn run() {
             confirm_close,
             print_document,
             page_setup,
+            show_font_panel,
             confirm_quit_window,
             cancel_quit,
         ])
