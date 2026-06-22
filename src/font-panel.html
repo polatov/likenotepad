@@ -23,6 +23,9 @@ body {
   --hover: rgba(0,113,227,0.10);
   --btn-bg: #e5e5e5;
   --btn-hover: #d8d8d8;
+  --accent-bg: #0071e3;
+  --accent-hover: #0077ed;
+  --accent-fg: #fff;
   --preview-bg: #fff;
   --select-bg: #fff;
 }
@@ -124,7 +127,13 @@ li.active { background: #0071e3; color: #fff; }
   min-width: 64px;
 }
 .btn:hover { background: var(--btn-hover); }
-.btn-ok { font-weight: 600; }
+.btn-ok {
+  font-weight: 600;
+  background: var(--accent-bg);
+  color: var(--accent-fg);
+  border-color: var(--accent-bg);
+}
+.btn-ok:hover { background: var(--accent-hover); }
 body.theme-light {
   background: #ececec;
   color: #000;
@@ -138,6 +147,8 @@ body.theme-dark {
   --hover: rgba(255,255,255,0.07);
   --btn-bg: #48484a;
   --btn-hover: #58585a;
+  --accent-bg: #0a84ff;
+  --accent-hover: #3296ff;
   --preview-bg: #3a3a3c;
   --select-bg: #3a3a3c;
 }
