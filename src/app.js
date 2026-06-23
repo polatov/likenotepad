@@ -241,23 +241,70 @@ function goToMatch(direction) {
     return;
   }
 
-  const current = editor.selectionStart;
+  // Базовая точка: конец предыдущего выделения (если оно совпадает с матчем — current будет idx этого матча)
+  // Для "next" ищем строго ПОСЛЕ конца выделения, чтобы не застревать на одном и том же
+  const anchorNext = editor.selectionEnd;
+  const anchorPrev = editor.selectionStart;
+
   let pos;
   if (direction === 1) {
-    pos = matches.findIndex((m) => m > current);
-    if (pos === -1) pos = 0;
+    pos = matches.findIndex((m) => m >= anchorNext);
+    if (pos === -1) pos = 0; // wrap to start
   } else {
     pos = -1;
     for (let i = matches.length - 1; i >= 0; i--) {
-      if (matches[i] < current) { pos = i; break; }
+      if (matches[i] + term.length <= anchorPrev) { pos = i; break; }
     }
-    if (pos === -1) pos = matches.length - 1;
+    if (pos === -1) pos = matches.length - 1; // wrap to end
   }
   const idx = matches[pos];
 
+  // Выделяем совпадение и скроллим к нему, потом возвращаем фокус в поле поиска.
+  // Скролл делаем пока фокус на editor (иначе scrollTop при setSelectionRange не сработает в WebKit для textarea без фокуса).
   editor.focus();
   editor.setSelectionRange(idx, idx + term.length);
+  scrollEditorToSelection(idx);
+
   findCount.textContent = (pos + 1) + (lang === "ru" ? " из " : " of ") + matches.length + (lang === "ru" ? " совпадений" : " matches");
+}
+
+// Скроллит textarea к позиции offset через зеркальный div с тем же шрифтом/wrap.
+function scrollEditorToSelection(offset) {
+  const ta = editor;
+  const cs = window.getComputedStyle(ta);
+  const mirror = document.createElement("div");
+  mirror.style.position = "absolute";
+  mirror.style.visibility = "hidden";
+  mirror.style.whiteSpace = cs.whiteSpace;
+  mirror.style.wordWrap = cs.wordWrap;
+  mirror.style.overflowWrap = cs.overflowWrap;
+  mirror.style.font = cs.font;
+  mirror.style.lineHeight = cs.lineHeight;
+  mirror.style.padding = cs.padding;
+  mirror.style.border = cs.border;
+  mirror.style.boxSizing = cs.boxSizing;
+  mirror.style.width = ta.clientWidth + "px";
+  mirror.style.top = "0";
+  mirror.style.left = "0";
+  document.body.appendChild(mirror);
+
+  const before = ta.value.substring(0, offset);
+  mirror.textContent = before;
+  const marker = document.createElement("span");
+  marker.textContent = "​";
+  mirror.appendChild(marker);
+
+  const markerTop = marker.offsetTop;
+  document.body.removeChild(mirror);
+
+  // Скроллим так, чтобы совпадение было в видимой области с отступом.
+  const lineH = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+  const visibleTop = ta.scrollTop;
+  const visibleBottom = visibleTop + ta.clientHeight;
+
+  if (markerTop < visibleTop || markerTop + lineH > visibleBottom) {
+    ta.scrollTop = Math.max(0, markerTop - ta.clientHeight / 3);
+  }
 }
 
 function doReplace() {
@@ -356,16 +403,34 @@ async function handleQuitSaveWindow() {
 // --- Init ---
 async function init() {
   editor.addEventListener("input", () => { markDirty(); updateStatus(); updatePos(); });
-  findInput.addEventListener("keydown", (e) => {
-    if (e.key === "Enter") {
-      e.preventDefault();
-      e.stopPropagation();
-      goToMatch(e.shiftKey ? -1 : 1);
-    }
-  });
+  // Document-level listener в capture phase: пока findbar открыт,
+  // Enter и Shift+Enter переходят к next/prev совпадению независимо от того,
+  // где сейчас фокус (findInput, editor или кнопка в баре).
+  // Capture phase нужен чтобы перехватить Enter ДО того, как textarea вставит \n.
+  document.addEventListener("keydown", (e) => {
+    const findbar = document.getElementById("findbar");
+    if (findbar.hidden) return;
+    if (e.key !== "Enter") return;
+    // Не перехватываем Enter если фокус в кнопках "Заменить"/"Заменить всё"
+    // (там Enter должен срабатывать как клик)
+    const ae = document.activeElement;
+    if (ae && (ae.id === "replace-one" || ae.id === "replace-all")) return;
+    e.preventDefault();
+    e.stopPropagation();
+    goToMatch(e.shiftKey ? -1 : 1);
+  }, true);
+  // Инкрементальный счётчик (как в TextEdit): пересчитываем при каждом изменении запроса.
+  // Перехода не делаем — для перехода нужен Enter/Cmd+G/кнопки.
   findInput.addEventListener("input", () => {
     if (!findInput.value) {
       findCount.textContent = "";
+      return;
+    }
+    const matches = findAllMatches();
+    if (matches.length === 0) {
+      findCount.textContent = lang === "ru" ? "Нет совпадений" : "No matches";
+    } else {
+      findCount.textContent = matches.length + (lang === "ru" ? " совпадений" : " matches");
     }
   });
   document.getElementById("find-prev").addEventListener("click", () => goToMatch(-1));

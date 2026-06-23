@@ -462,7 +462,6 @@ async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut builder = app.dialog()
         .file()
-        .add_filter("Text", &["txt"])
         .set_file_name(&suggested_name);
     if let Some(dir) = &last_dir {
         builder = builder.set_directory(dir);
@@ -729,11 +728,11 @@ pub fn run() {
             let undo       = MenuItem::with_id(handle, "edit_undo",       if lang == "ru" { "Отменить"     } else { "Undo"        }, true, Some("CmdOrCtrl+Z"))?;
             let redo       = MenuItem::with_id(handle, "edit_redo",       if lang == "ru" { "Повторить"    } else { "Redo"        }, true, Some("CmdOrCtrl+Shift+Z"))?;
             let sep2 = PredefinedMenuItem::separator(handle)?;
-            let cut        = MenuItem::with_id(handle, "edit_cut",        if lang == "ru" { "Вырезать"     } else { "Cut"         }, true, Some("CmdOrCtrl+X"))?;
-            let copy       = MenuItem::with_id(handle, "edit_copy",       if lang == "ru" { "Копировать"   } else { "Copy"        }, true, Some("CmdOrCtrl+C"))?;
-            let paste      = MenuItem::with_id(handle, "edit_paste",      if lang == "ru" { "Вставить"     } else { "Paste"       }, true, Some("CmdOrCtrl+V"))?;
+            let cut        = PredefinedMenuItem::cut(handle, Some(if lang == "ru" { "Вырезать"     } else { "Cut"        }))?;
+            let copy       = PredefinedMenuItem::copy(handle, Some(if lang == "ru" { "Копировать"   } else { "Copy"       }))?;
+            let paste      = PredefinedMenuItem::paste(handle, Some(if lang == "ru" { "Вставить"     } else { "Paste"      }))?;
             let sep3 = PredefinedMenuItem::separator(handle)?;
-            let select_all = MenuItem::with_id(handle, "edit_select_all", if lang == "ru" { "Выделить всё" } else { "Select All"  }, true, Some("CmdOrCtrl+A"))?;
+            let select_all = PredefinedMenuItem::select_all(handle, Some(if lang == "ru" { "Выделить всё" } else { "Select All" }))?;
             let find_item = MenuItem::with_id(handle, "edit_find", if lang == "ru" { "Найти..." } else { "Find..." }, true, Some("CmdOrCtrl+F"))?;
             let find_next_item = MenuItem::with_id(handle, "edit_find_next", if lang == "ru" { "Найти далее" } else { "Find Next" }, true, Some("CmdOrCtrl+G"))?;
             let replace_item = MenuItem::with_id(handle, "edit_replace", if lang == "ru" { "Заменить..." } else { "Replace..." }, true, Some("CmdOrCtrl+Alt+F"))?;
@@ -861,10 +860,7 @@ pub fn run() {
                     "font_panel" => { emit_to_focused(app, "menu-font-panel", ()); }
                     "edit_undo"       => { emit_to_focused(app, "menu-edit", "undo"); }
                     "edit_redo"       => { emit_to_focused(app, "menu-edit", "redo"); }
-                    "edit_cut"        => { emit_to_focused(app, "menu-edit", "cut"); }
-                    "edit_copy"       => { emit_to_focused(app, "menu-edit", "copy"); }
-                    "edit_paste"      => { emit_to_focused(app, "menu-edit", "paste"); }
-                    "edit_select_all" => { emit_to_focused(app, "menu-edit", "select-all"); }
+
                     "edit_find" => { emit_to_focused(app, "menu-edit", "find"); }
                     "edit_find_next" => { emit_to_focused(app, "menu-edit", "find-next"); }
                     "edit_replace" => { emit_to_focused(app, "menu-edit", "replace"); }
