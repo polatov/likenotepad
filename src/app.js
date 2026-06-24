@@ -59,12 +59,31 @@ function t(key, arg) {
 // --- State ---
 let currentPath = null;
 let dirty = false;
+let untitledNum = 0;
 
 function updateTitle() {
-  const name = currentPath ? currentPath.split("/").pop() : t("unsaved");
+  let name;
+  if (currentPath) {
+    name = currentPath.split("/").pop();
+  } else {
+    const base = t("unsaved");
+    name = untitledNum > 1 ? `${base} ${untitledNum}` : base;
+  }
   const title = `${dirty ? "• " : ""}${name} — LikeNotepad.exe`;
   document.title = title;
   getCurrentWindow().setTitle(title);
+}
+
+async function releaseUntitled() {
+  if (untitledNum === 0) return;
+  untitledNum = 0;
+  try { await invoke("release_untitled_number"); } catch (e) {}
+}
+
+function displayName() {
+  if (currentPath) return currentPath.split("/").pop();
+  const base = t("unsaved");
+  return untitledNum > 1 ? `${base} ${untitledNum}` : base;
 }
 
 function markDirty() { dirty = true; updateTitle(); syncDirty(); }
@@ -101,6 +120,7 @@ async function openFile() {
   const [path, content] = result;
   editor.value = content;
   currentPath = path;
+  await releaseUntitled();
   markClean();
   updateStatus();
 }
@@ -113,10 +133,11 @@ async function saveFile() {
 }
 
 async function saveFileAs() {
-  const suggestedName = currentPath ? currentPath.split("/").pop() : (lang === "ru" ? "Без имени.txt" : "Untitled.txt");
+  const suggestedName = currentPath ? currentPath.split("/").pop() : `${displayName()}.txt`;
   const result = await invoke("save_file_as", { content: editor.value, suggestedName });
   if (!result) return false;
   currentPath = result;
+  await releaseUntitled();
   markClean();
   return true;
 }
@@ -361,9 +382,7 @@ async function handleCloseRequested() {
       return;
     }
 
-    const name = currentPath
-      ? currentPath.split('/').pop()
-      : (lang === "ru" ? "Без названия" : "Untitled");
+    const name = displayName();
 
     const shouldSave = await ask(
       lang === "ru" ? `Сохранить изменения в «${name}»?` : `Save changes to "${name}"?`,
@@ -485,13 +504,13 @@ async function init() {
         windowShown = true;
       } catch (e) { console.error("show:", e); }
     }
-    await listen("close-requested", handleCloseRequested);
-    await listen("menu-close-window", handleCloseRequested);
+    await getCurrentWindow().listen("close-requested", handleCloseRequested);
+    await getCurrentWindow().listen("menu-close-window", handleCloseRequested);
     await getCurrentWindow().listen("quit-save-window", handleQuitSaveWindow);
-    await listen("menu-open", openFile);
-    await listen("menu-save", saveFile);
-    await listen("menu-save-as", saveFileAs);
-    await listen("menu-font-panel", async () => {
+    await getCurrentWindow().listen("menu-open", openFile);
+    await getCurrentWindow().listen("menu-save", saveFile);
+    await getCurrentWindow().listen("menu-save-as", saveFileAs);
+    await getCurrentWindow().listen("menu-font-panel", async () => {
       await openFontPanel();
     });
     await listen("font-changed", (event) => {
@@ -501,14 +520,14 @@ async function init() {
       editor.style.fontWeight = weight;
       editor.style.fontStyle = style;
     });
-    await listen("menu-page-setup", async () => {
+    await getCurrentWindow().listen("menu-page-setup", async () => {
       await invoke("page_setup");
     });
-    await listen("menu-print", async () => {
-      const filename = currentPath ? currentPath.split('/').pop() : (lang === 'ru' ? 'Без имени' : 'Untitled');
+    await getCurrentWindow().listen("menu-print", async () => {
+      const filename = displayName();
       await invoke("print_document", { text: editor.value, filename });
     });
-    await listen("menu-open-recent", async (e) => {
+    await getCurrentWindow().listen("menu-open-recent", async (e) => {
       const [path, content] = e.payload;
       if (dirty) {
         const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), okLabel: t("yes"), cancelLabel: t("no"), kind: "warning" });
@@ -516,6 +535,7 @@ async function init() {
       }
       editor.value = content;
       currentPath = path;
+      await releaseUntitled();
       markClean();
       updateStatus();
     });
@@ -543,7 +563,7 @@ async function init() {
         console.error("set_status_bar:", err);
       }
     });
-    await listen("menu-edit", async (e) => {
+    await getCurrentWindow().listen("menu-edit", async (e) => {
       switch (e.payload) {
         case "undo":       document.execCommand("undo"); break;
         case "redo":       document.execCommand("redo"); break;
@@ -590,6 +610,9 @@ async function init() {
         }
       }
     });
+    if (!currentPath) {
+      try { untitledNum = await invoke("claim_untitled_number"); } catch (e) {}
+    }
     updateStatus();
     updateTitle();
     updatePos();

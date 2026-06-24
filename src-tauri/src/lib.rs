@@ -11,7 +11,7 @@ use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::NSObject;
 use objc2::{AnyThread, ClassType, MainThreadMarker, MainThreadOnly};
 use std::sync::OnceLock;
-use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSFontManager, NSPageLayout, NSPrintOperation, NSTextView};
+use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSFontManager, NSPageLayout, NSPrintOperation, NSTextView, NSWindow, NSWindowTabbingMode};
 use objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSPoint, NSRect, NSSize, NSString};
 
 define_class!(
@@ -48,7 +48,8 @@ static WINDOW_COUNTER: AtomicU32 = AtomicU32::new(1);
 fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, payload: impl serde::Serialize + Clone) {
     for (_, win) in app.webview_windows() {
         if win.is_focused().unwrap_or(false) {
-            let _ = win.emit(event, payload);
+            let label = win.label().to_string();
+            let _ = win.emit_to(&label, event, payload);
             return;
         }
     }
@@ -99,6 +100,15 @@ fn show_quit_alert(count: usize, lang: &str) -> isize {
     })
 }
 
+fn disable_tabbing(window: &tauri::WebviewWindow) {
+    if let Ok(ptr) = window.ns_window() {
+        unsafe {
+            let ns_window = &*(ptr as *const NSWindow);
+            ns_window.setTabbingMode(NSWindowTabbingMode::Disallowed);
+        }
+    }
+}
+
 fn new_window(app: &tauri::AppHandle) {
     let n = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     let label = format!("win-{}", n);
@@ -114,7 +124,7 @@ fn new_window(app: &tauri::AppHandle) {
         })
         .unwrap_or((100.0, 100.0));
 
-    if let Err(e) = tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App("index.html".into()))
+    match tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App("index.html".into()))
         .title("LikeNotepad.exe")
         .inner_size(800.0, 600.0)
         .min_inner_size(400.0, 300.0)
@@ -124,7 +134,8 @@ fn new_window(app: &tauri::AppHandle) {
         .visible(false)
         .build()
     {
-        eprintln!("new_window error: {e}");
+        Ok(win) => disable_tabbing(&win),
+        Err(e) => eprintln!("new_window error: {e}"),
     }
 }
 
@@ -409,6 +420,31 @@ fn set_dirty(window: tauri::Window, dirty: bool) {
 }
 
 #[tauri::command]
+fn claim_untitled_number(window: tauri::Window) -> u32 {
+    let state = window.state::<UntitledState>();
+    let mut guard = state.0.lock().unwrap();
+    let label = window.label().to_string();
+    // если у окна уже есть номер — вернуть его (идемпотентность)
+    if let Some(n) = guard.get(&label) {
+        return *n;
+    }
+    // найти наименьший свободный номер начиная с 1
+    let used: std::collections::HashSet<u32> = guard.values().copied().collect();
+    let mut n = 1;
+    while used.contains(&n) {
+        n += 1;
+    }
+    guard.insert(label, n);
+    n
+}
+
+#[tauri::command]
+fn release_untitled_number(window: tauri::Window) {
+    let state = window.state::<UntitledState>();
+    state.0.lock().unwrap().remove(window.label());
+}
+
+#[tauri::command]
 fn confirm_close(window: tauri::Window) {
     window.state::<ConfirmedWindowsState>()
         .0.lock().unwrap().insert(window.label().to_string());
@@ -595,6 +631,8 @@ struct RecentFilesState(std::sync::Mutex<Vec<String>>);
 struct RecentMenuState(std::sync::Mutex<Option<tauri::menu::Submenu<tauri::Wry>>>);
 struct ConfirmedWindowsState(std::sync::Mutex<std::collections::HashSet<String>>);
 struct DirtyState(std::sync::Mutex<std::collections::HashMap<String, bool>>);
+
+struct UntitledState(std::sync::Mutex<std::collections::HashMap<String, u32>>);
 struct QuitProgress {
     queue: Vec<String>,
     cancelled: bool,
@@ -663,9 +701,13 @@ pub fn run() {
         .manage(RecentMenuState(std::sync::Mutex::new(None)))
         .manage(ConfirmedWindowsState(std::sync::Mutex::new(std::collections::HashSet::new())))
         .manage(DirtyState(std::sync::Mutex::new(std::collections::HashMap::new())))
+        .manage(UntitledState(std::sync::Mutex::new(std::collections::HashMap::new())))
         .manage(QuitState(std::sync::Mutex::new(QuitProgress { queue: Vec::new(), cancelled: false })))
         .setup(move |app| {
             let handle = app.handle();
+            if let Some(main) = app.get_webview_window("main") {
+                disable_tabbing(&main);
+            }
             let mut cfg = config::load(handle);
             let saved_theme = cfg.theme.clone();
             let saved_wrap = cfg.word_wrap;
@@ -946,7 +988,14 @@ pub fn run() {
                     .0.lock().unwrap().contains(&label);
                 if confirmed { return; }
                 api.prevent_close();
-                let _ = window.emit("close-requested", ());
+                let _ = window.emit_to(&label, "close-requested", ());
+            }
+            if let tauri::WindowEvent::Destroyed = event {
+                if window.label() == "font-panel" {
+                    return;
+                }
+                window.state::<UntitledState>()
+                    .0.lock().unwrap().remove(window.label());
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -968,6 +1017,8 @@ pub fn run() {
             get_status_bar,
             set_status_bar,
             set_dirty,
+            claim_untitled_number,
+            release_untitled_number,
             confirm_close,
             print_document,
             page_setup,
