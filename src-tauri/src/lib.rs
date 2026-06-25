@@ -109,32 +109,58 @@ fn disable_tabbing(window: &tauri::WebviewWindow) {
     }
 }
 
+fn cascade_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
+    if let Ok(ptr) = window.ns_window() {
+        unsafe {
+            let ns_window = &*(ptr as *const NSWindow);
+            let state = app.state::<CascadeState>();
+            let mut guard = state.0.lock().unwrap();
+
+            let start = match *guard {
+                // продолжаем каскад с сохранённой точки
+                Some((x, y)) => NSPoint::new(x, y),
+                // первая точка стопки: top-left главного окна в Cocoa-координатах
+                None => {
+                    if let Some(main) = app.get_webview_window("main") {
+                        if let Ok(mptr) = main.ns_window() {
+                            let mwin = &*(mptr as *const NSWindow);
+                            let f = mwin.frame();
+                            // frame.origin = bottom-left; top-left.y = origin.y + height.
+                            // Смещаем на один шаг каскада (+25,-25 в Cocoa: вправо и вниз
+                            // экранно), иначе первое окно ляжет ровно поверх main.
+                            NSPoint::new(f.origin.x + 25.0, f.origin.y + f.size.height - 25.0)
+                        } else {
+                            NSPoint::new(0.0, 0.0)
+                        }
+                    } else {
+                        NSPoint::new(0.0, 0.0)
+                    }
+                }
+            };
+
+            let next = ns_window.cascadeTopLeftFromPoint(start);
+            *guard = Some((next.x, next.y));
+        }
+    }
+}
+
 fn new_window(app: &tauri::AppHandle) {
     let n = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     let label = format!("win-{}", n);
-
-    let (x, y) = app.webview_windows()
-        .into_values()
-        .find(|w| w.is_focused().unwrap_or(false))
-        .and_then(|w| {
-            let scale = w.scale_factor().ok()?;
-            let phys = w.outer_position().ok()?;
-            let log = phys.to_logical::<f64>(scale);
-            Some((log.x + 25.0, log.y + 25.0))
-        })
-        .unwrap_or((100.0, 100.0));
 
     match tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App("index.html".into()))
         .title("LikeNotepad.exe")
         .inner_size(800.0, 600.0)
         .min_inner_size(400.0, 300.0)
-        .position(x, y)
         .resizable(true)
         .decorations(true)
         .visible(false)
         .build()
     {
-        Ok(win) => disable_tabbing(&win),
+        Ok(win) => {
+            disable_tabbing(&win);
+            cascade_window(app, &win);
+        }
         Err(e) => eprintln!("new_window error: {e}"),
     }
 }
@@ -633,6 +659,7 @@ struct ConfirmedWindowsState(std::sync::Mutex<std::collections::HashSet<String>>
 struct DirtyState(std::sync::Mutex<std::collections::HashMap<String, bool>>);
 
 struct UntitledState(std::sync::Mutex<std::collections::HashMap<String, u32>>);
+struct CascadeState(std::sync::Mutex<Option<(f64, f64)>>);
 struct QuitProgress {
     queue: Vec<String>,
     cancelled: bool,
@@ -702,6 +729,7 @@ pub fn run() {
         .manage(ConfirmedWindowsState(std::sync::Mutex::new(std::collections::HashSet::new())))
         .manage(DirtyState(std::sync::Mutex::new(std::collections::HashMap::new())))
         .manage(UntitledState(std::sync::Mutex::new(std::collections::HashMap::new())))
+        .manage(CascadeState(std::sync::Mutex::new(None)))
         .manage(QuitState(std::sync::Mutex::new(QuitProgress { queue: Vec::new(), cancelled: false })))
         .setup(move |app| {
             let handle = app.handle();
