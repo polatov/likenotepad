@@ -18,6 +18,7 @@ const gotoInput = document.getElementById("goto-input");
 
 // --- i18n ---
 let lang = "en";
+let findbarNavMode = false;
 let windowShown = false;
 let isHandlingClose = false;
 let isHandlingQuit = false;
@@ -420,6 +421,19 @@ async function handleQuitSaveWindow() {
 // --- Init ---
 async function init() {
   editor.addEventListener("input", () => { markDirty(); updateStatus(); updatePos(); });
+  // Живой клик/печать в editor выключает режим навигации по Enter:
+  // после этого Enter в тексте = перенос строки, а не "найти далее".
+  // Программный editor.focus() из goToMatch события mousedown не шлёт — флаг переживает.
+  editor.addEventListener("mousedown", () => { findbarNavMode = false; });
+  editor.addEventListener("keydown", (e) => {
+    // Не сбрасываем режим навигации на: Enter (обрабатывает capture-листенер),
+    // хоткеи (Cmd/Ctrl/Alt) и чистые модификаторы (Shift/Ctrl/Alt/Meta сами
+    // по себе — они приходят отдельным keydown перед основной клавишей).
+    if (e.key === "Enter") return;
+    if (e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") return;
+    findbarNavMode = false;
+  });
   // Document-level listener в capture phase: пока findbar открыт,
   // Enter и Shift+Enter переходят к next/prev совпадению независимо от того,
   // где сейчас фокус (findInput, editor или кнопка в баре).
@@ -428,10 +442,10 @@ async function init() {
     const findbar = document.getElementById("findbar");
     if (findbar.hidden) return;
     if (e.key !== "Enter") return;
-    // Не перехватываем Enter если фокус в кнопках "Заменить"/"Заменить всё"
-    // (там Enter должен срабатывать как клик)
-    const ae = document.activeElement;
-    if (ae && (ae.id === "replace-one" || ae.id === "replace-all")) return;
+    // Enter переходит к совпадению ТОЛЬКО когда фокус внутри findbar
+    // (поле поиска или замены). В editor Enter = перенос строки (как TextEdit).
+    // "Найти далее" из текста — через Cmd+G / Cmd+Shift+G (висят отдельно).
+    if (!findbarNavMode) return;
     e.preventDefault();
     e.stopPropagation();
     goToMatch(e.shiftKey ? -1 : 1);
@@ -458,6 +472,8 @@ async function init() {
   });
   document.getElementById("replace-one").addEventListener("click", doReplace);
   document.getElementById("replace-all").addEventListener("click", doReplaceAll);
+  findInput.addEventListener("focus", () => { findbarNavMode = true; });
+  document.getElementById("replace-input").addEventListener("focus", () => { findbarNavMode = true; });
   findClose.addEventListener("click", closeFind);
   gotoInput.addEventListener("keydown", (e) => {
     if (e.key === "Enter") { e.preventDefault(); doGoto(); }
