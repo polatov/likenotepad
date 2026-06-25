@@ -384,17 +384,15 @@ async function handleCloseRequested() {
 
     const name = displayName();
 
-    const shouldSave = await ask(
-      lang === "ru" ? `Сохранить изменения в «${name}»?` : `Save changes to "${name}"?`,
-      { title: "LikeNotepad", kind: "warning",
-        okLabel: lang === "ru" ? "Сохранить" : "Save",
-        cancelLabel: lang === "ru" ? "Не сохранять" : "Don't Save" }
-    );
+    // 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
+    const choice = await invoke("confirm_close_dirty", { name, lang });
 
-    if (shouldSave) {
+    if (choice === 2) return;            // Отмена — окно остаётся открытым
+    if (choice === 0) {                  // Сохранить
       const saved = await saveFile();
-      if (!saved) return;
+      if (!saved) return;                // отменили Save As — не закрываем
     }
+    // choice === 1 (Не сохранять) проваливается сюда без сохранения
     await invoke("confirm_close");
   } finally {
     isHandlingClose = false;

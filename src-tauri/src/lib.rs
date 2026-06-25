@@ -93,9 +93,42 @@ fn show_quit_alert(count: usize, lang: &str) -> isize {
         alert.setInformativeText(&NSString::from_str(&info));
         alert.addButtonWithTitle(&NSString::from_str(b_save));
         alert.addButtonWithTitle(&NSString::from_str(b_dont));
-        alert.addButtonWithTitle(&NSString::from_str(b_cancel));
+        let cancel_btn = alert.addButtonWithTitle(&NSString::from_str(b_cancel));
+        cancel_btn.setKeyEquivalent(&NSString::from_str("\u{1b}"));
         let response = alert.runModal();
         // NSAlertFirstButtonReturn = 1000, второй = 1001, третий = 1002
+        response - 1000
+    })
+}
+
+// Показывает трёхкнопочный NSAlert для закрытия ОДНОГО окна (стиль TextEdit).
+// ДОЛЖЕН вызываться на главном потоке.
+// Возврат: 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
+fn show_close_alert(name: &str, lang: &str) -> isize {
+    autoreleasepool(|_| {
+        let (msg, info, b_save, b_dont, b_cancel) = if lang == "ru" {
+            (
+                format!("Сохранить изменения в «{}»?", name),
+                "Если не сохранить, изменения будут потеряны.".to_string(),
+                "Сохранить…", "Не сохранять", "Отмена",
+            )
+        } else {
+            (
+                format!("Do you want to save the changes you made to \"{}\"?", name),
+                "Your changes will be lost if you don't save them.".to_string(),
+                "Save…", "Don't Save", "Cancel",
+            )
+        };
+        let mtm = MainThreadMarker::new().unwrap();
+        let alert = NSAlert::new(mtm);
+        alert.setAlertStyle(NSAlertStyle::Warning);
+        alert.setMessageText(&NSString::from_str(&msg));
+        alert.setInformativeText(&NSString::from_str(&info));
+        alert.addButtonWithTitle(&NSString::from_str(b_save));
+        alert.addButtonWithTitle(&NSString::from_str(b_dont));
+        let cancel_btn = alert.addButtonWithTitle(&NSString::from_str(b_cancel));
+        cancel_btn.setKeyEquivalent(&NSString::from_str("\u{1b}"));
+        let response = alert.runModal();
         response - 1000
     })
 }
@@ -468,6 +501,16 @@ fn claim_untitled_number(window: tauri::Window) -> u32 {
 fn release_untitled_number(window: tauri::Window) {
     let state = window.state::<UntitledState>();
     state.0.lock().unwrap().remove(window.label());
+}
+
+#[tauri::command]
+async fn confirm_close_dirty(app: AppHandle, name: String, lang: String) -> Result<isize, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel::<isize>();
+    let _ = app.run_on_main_thread(move || {
+        let choice = show_close_alert(&name, &lang);
+        let _ = tx.send(choice);
+    });
+    rx.await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1048,6 +1091,7 @@ pub fn run() {
             claim_untitled_number,
             release_untitled_number,
             confirm_close,
+            confirm_close_dirty,
             print_document,
             page_setup,
             show_font_panel,
