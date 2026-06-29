@@ -241,6 +241,29 @@ fn new_window(app: &tauri::AppHandle) {
     }
 }
 
+fn new_standalone_window(app: &tauri::AppHandle) {
+    let n = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+    let label = format!("win-{}", n);
+
+    match tauri::WebviewWindowBuilder::new(app, label, tauri::WebviewUrl::App("index.html".into()))
+        .title("LikeNotepad.exe")
+        .inner_size(800.0, 600.0)
+        .min_inner_size(400.0, 300.0)
+        .resizable(true)
+        .decorations(true)
+        .visible(false)
+        .build()
+    {
+        Ok(win) => {
+            // Preferred (а не Disallowed): окно сможет принимать вкладки как
+            // хост своей группы. В одиночестве таб-бар не показывается.
+            set_tabbing_preferred(&win);
+            cascade_window(app, &win);
+        }
+        Err(e) => eprintln!("new_standalone_window error: {e}"),
+    }
+}
+
 // Detect system language: returns "ru" or "en"
 fn system_lang() -> &'static str {
     let locale = sys_locale::get_locale().unwrap_or_default();
@@ -907,6 +930,7 @@ pub fn run() {
             let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item, &sep_app, &settings_item, &sep_settings, &quit_item])?;
 
             let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Создать" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
+            let new_window_item = MenuItem::with_id(handle, "new_window", if lang == "ru" { "Новое окно" } else { "New Window" }, true, Some("CmdOrCtrl+Shift+N"))?;
             let open_item = MenuItem::with_id(handle, "open", if lang == "ru" { "Открыть..." } else { "Open..." }, true, Some("CmdOrCtrl+O"))?;
             let recent_label = if lang == "ru" { "Открыть недавние" } else { "Open Recent" };
             let recent_submenu = Submenu::with_id(handle, "recent_submenu", recent_label, true)?;
@@ -922,6 +946,7 @@ pub fn run() {
             let file_label = if lang == "ru" { "Файл" } else { "File" };
             let file_menu = Submenu::with_items(handle, file_label, true, &[
                 &new_item,
+                &new_window_item,
                 &open_item,
                 &recent_submenu,
                 &sep,
@@ -1049,6 +1074,7 @@ pub fn run() {
                         });
                     }
                     "new" => { new_window(app); }
+                    "new_window" => { new_standalone_window(app); }
                     "open" => { emit_to_focused(app, "menu-open", ()); }
                     "save" => { emit_to_focused(app, "menu-save", ()); }
                     "save_as"    => { emit_to_focused(app, "menu-save-as", ()); }
