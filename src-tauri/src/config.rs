@@ -13,6 +13,7 @@ pub struct Config {
     pub font_size: f64,
     pub font_weight: String,
     pub font_style: String,
+    pub use_tabs: bool,
 }
 
 impl Default for Config {
@@ -27,6 +28,7 @@ impl Default for Config {
             font_size: 13.0,
             font_weight: "normal".to_string(),
             font_style: "normal".to_string(),
+            use_tabs: false,
         }
     }
 }

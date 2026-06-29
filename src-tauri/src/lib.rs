@@ -11,7 +11,7 @@ use objc2::rc::{autoreleasepool, Retained};
 use objc2::runtime::NSObject;
 use objc2::{AnyThread, ClassType, MainThreadMarker, MainThreadOnly};
 use std::sync::OnceLock;
-use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSFontManager, NSPageLayout, NSPrintOperation, NSTextView, NSWindow, NSWindowTabbingMode};
+use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSFontManager, NSPageLayout, NSPrintOperation, NSTextView, NSWindow, NSWindowTabbingMode, NSWindowOrderingMode};
 use objc2_foundation::{NSAttributedString, NSMutableAttributedString, NSPoint, NSRect, NSSize, NSString};
 
 define_class!(
@@ -142,6 +142,25 @@ fn disable_tabbing(window: &tauri::WebviewWindow) {
     }
 }
 
+fn set_tabbing_preferred(window: &tauri::WebviewWindow) {
+    if let Ok(ptr) = window.ns_window() {
+        unsafe {
+            let ns_window = &*(ptr as *const NSWindow);
+            ns_window.setTabbingMode(NSWindowTabbingMode::Preferred);
+        }
+    }
+}
+
+fn attach_as_tab(host: &tauri::WebviewWindow, new_win: &tauri::WebviewWindow) {
+    if let (Ok(hptr), Ok(nptr)) = (host.ns_window(), new_win.ns_window()) {
+        unsafe {
+            let host_win = &*(hptr as *const NSWindow);
+            let new_win_ns = &*(nptr as *const NSWindow);
+            host_win.addTabbedWindow_ordered(new_win_ns, NSWindowOrderingMode::Above);
+        }
+    }
+}
+
 fn cascade_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
     if let Ok(ptr) = window.ns_window() {
         unsafe {
@@ -178,6 +197,18 @@ fn cascade_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
 }
 
 fn new_window(app: &tauri::AppHandle) {
+    let use_tabs = crate::config::load(app).use_tabs;
+
+    // Хост-окно ищем ДО build — после создания нового окна фокус перескочит.
+    let host = if use_tabs {
+        app.webview_windows()
+            .into_iter()
+            .find(|(_, w)| w.is_focused().unwrap_or(false))
+            .map(|(_, w)| w)
+    } else {
+        None
+    };
+
     let n = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
     let label = format!("win-{}", n);
 
@@ -191,8 +222,20 @@ fn new_window(app: &tauri::AppHandle) {
         .build()
     {
         Ok(win) => {
-            disable_tabbing(&win);
-            cascade_window(app, &win);
+            if use_tabs {
+                set_tabbing_preferred(&win);
+                match host {
+                    Some(h) => {
+                        set_tabbing_preferred(&h);
+                        attach_as_tab(&h, &win);
+                    }
+                    // нет фокусного окна (первое окно) — standalone, станет хостом
+                    None => {}
+                }
+            } else {
+                disable_tabbing(&win);
+                cascade_window(app, &win);
+            }
         }
         Err(e) => eprintln!("new_window error: {e}"),
     }
@@ -455,7 +498,7 @@ fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
     }
     let theme = config::load(app).theme;
     let url_str = format!("settings.html?theme={}", theme);
-    tauri::WebviewWindowBuilder::new(
+    let mut builder = tauri::WebviewWindowBuilder::new(
         app,
         "settings",
         tauri::WebviewUrl::App(std::path::PathBuf::from(url_str)),
@@ -464,8 +507,17 @@ fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
     .inner_size(440.0, 200.0)
     .resizable(false)
     .minimizable(false)
-    .visible(false)
-    .build()?;
+    .visible(false);
+
+    if let Some(parent) = app.webview_windows()
+        .into_iter()
+        .find(|(label, w)| label != "settings" && w.is_focused().unwrap_or(false))
+        .map(|(_, w)| w)
+    {
+        builder = builder.parent(&parent)?;
+    }
+
+    builder.build()?;
     Ok(())
 }
 
@@ -486,6 +538,18 @@ fn get_word_wrap(app: tauri::AppHandle) -> bool {
 fn set_word_wrap(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let mut cfg = config::load(&app);
     cfg.word_wrap = enabled;
+    config::save(&app, &cfg)
+}
+
+#[tauri::command]
+fn get_use_tabs(app: tauri::AppHandle) -> bool {
+    config::load(&app).use_tabs
+}
+
+#[tauri::command]
+fn set_use_tabs(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.use_tabs = enabled;
     config::save(&app, &cfg)
 }
 
@@ -1098,6 +1162,8 @@ pub fn run() {
             close_settings,
             get_word_wrap,
             set_word_wrap,
+            get_use_tabs,
+            set_use_tabs,
             get_status_bar,
             set_status_bar,
             set_dirty,
