@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Настройки</title>
+<style>
+  :root {
+    --bg: #ECECEC;
+    --text: #1d1d1f;
+    --label: #6e6e73;
+    --track: #d9d9dc;
+    --seg-active-bg: #ffffff;
+    --seg-shadow: rgba(0,0,0,0.14);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #2a2a2c;
+      --text: #f5f5f7;
+      --label: #98989d;
+      --track: #1c1c1e;
+      --seg-active-bg: #636366;
+      --seg-shadow: rgba(0,0,0,0.45);
+    }
+  }
+  body.theme-light {
+    --bg: #ECECEC; --text: #1d1d1f; --label: #6e6e73;
+    --track: #d9d9dc; --seg-active-bg: #ffffff; --seg-shadow: rgba(0,0,0,0.14);
+  }
+  body.theme-dark {
+    --bg: #2a2a2c; --text: #f5f5f7; --label: #98989d;
+    --track: #1c1c1e; --seg-active-bg: #636366; --seg-shadow: rgba(0,0,0,0.45);
+  }
+  html, body { height: 100%; margin: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Helvetica Neue", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .row-label {
+    font-size: 13px;
+    color: var(--label);
+  }
+  .segment {
+    display: inline-flex;
+    background: var(--track);
+    border-radius: 8px;
+    padding: 2px;
+  }
+  .seg {
+    appearance: none;
+    border: none;
+    background: transparent;
+    color: var(--text);
+    font-family: inherit;
+    font-size: 13px;
+    padding: 4px 16px;
+    border-radius: 6px;
+    cursor: default;
+    transition: background 0.12s ease;
+  }
+  .seg.active {
+    background: var(--seg-active-bg);
+    box-shadow: 0 1px 2.5px var(--seg-shadow);
+  }
+</style>
+</head>
+<body>
+  <div class="row">
+    <span class="row-label">Тема</span>
+    <div class="segment" role="radiogroup">
+      <button class="seg" data-theme="auto">Авто</button>
+      <button class="seg" data-theme="light">Светлая</button>
+      <button class="seg" data-theme="dark">Тёмная</button>
+    </div>
+  </div>
+<script>
+  const invoke = window.__TAURI__.core.invoke;
+  const { emit } = window.__TAURI__.event;
+  const { getCurrentWindow } = window.__TAURI__.window;
+
+  function applyWindowTheme(theme) {
+    document.body.classList.remove("theme-light", "theme-dark");
+    if (theme === "light") document.body.classList.add("theme-light");
+    else if (theme === "dark") document.body.classList.add("theme-dark");
+    // auto → без класса → @media следует системе
+  }
+
+  function setActiveSegment(theme) {
+    document.querySelectorAll(".seg").forEach((b) => {
+      b.classList.toggle("active", b.dataset.theme === theme);
+    });
+  }
+
+  async function selectTheme(theme) {
+    applyWindowTheme(theme);
+    setActiveSegment(theme);
+    try { await invoke("set_theme", { theme }); } catch (e) { console.error("set_theme:", e); }
+    try { await emit("menu-theme", theme); } catch (e) { console.error("emit menu-theme:", e); }
+  }
+
+  document.querySelectorAll(".seg").forEach((b) => {
+    b.addEventListener("click", () => selectTheme(b.dataset.theme));
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") { invoke("close_settings"); }
+  });
+
+  // Init: тема из URL → применить ДО show (анти-FOUC)
+  const initial = new URLSearchParams(location.search).get("theme") || "auto";
+  applyWindowTheme(initial);
+  setActiveSegment(initial);
+
+  let shown = false;
+  function showWindow() {
+    if (shown) return;
+    shown = true;
+    getCurrentWindow().show().catch((e) => console.error("show:", e));
+  }
+  showWindow();
+  setTimeout(showWindow, 100);
+</script>
+</body>
+</html>

@@ -447,6 +447,36 @@ async fn close_font_panel(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
+    if let Some(win) = app.get_webview_window("settings") {
+        win.show()?;
+        win.set_focus()?;
+        return Ok(());
+    }
+    let theme = config::load(app).theme;
+    let url_str = format!("settings.html?theme={}", theme);
+    tauri::WebviewWindowBuilder::new(
+        app,
+        "settings",
+        tauri::WebviewUrl::App(std::path::PathBuf::from(url_str)),
+    )
+    .title("Настройки")
+    .inner_size(440.0, 200.0)
+    .resizable(false)
+    .minimizable(false)
+    .visible(false)
+    .build()?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn close_settings(app: tauri::AppHandle) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("settings") {
+        win.close().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 #[tauri::command]
 fn get_word_wrap(app: tauri::AppHandle) -> bool {
     config::load(&app).word_wrap
@@ -807,7 +837,10 @@ pub fn run() {
             let sep_app = PredefinedMenuItem::separator(handle)?;
             let quit_label = if lang == "ru" { "Завершить LikeNotepad.exe" } else { "Quit LikeNotepad.exe" };
             let quit_item = MenuItem::with_id(handle, "quit", quit_label, true, Some("CmdOrCtrl+Q"))?;
-            let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item, &sep_app, &quit_item])?;
+            let settings_label = if lang == "ru" { "Настройки\u{2026}" } else { "Settings\u{2026}" };
+            let settings_item = MenuItem::with_id(handle, "settings", settings_label, true, Some("CmdOrCtrl+Comma"))?;
+            let sep_settings = PredefinedMenuItem::separator(handle)?;
+            let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item, &sep_app, &settings_item, &sep_settings, &quit_item])?;
 
             let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Создать" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
             let open_item = MenuItem::with_id(handle, "open", if lang == "ru" { "Открыть..." } else { "Open..." }, true, Some("CmdOrCtrl+O"))?;
@@ -871,23 +904,11 @@ pub fn run() {
                 &datetime_item,
             ])?;
 
-            let theme_auto  = CheckMenuItem::with_id(handle, "theme_auto",  if lang == "ru" { "Авто"    } else { "Auto"  }, true, saved_theme == "auto",  None::<&str>)?;
-            let theme_light = CheckMenuItem::with_id(handle, "theme_light", if lang == "ru" { "Светлая" } else { "Light" }, true, saved_theme == "light", None::<&str>)?;
-            let theme_dark  = CheckMenuItem::with_id(handle, "theme_dark",  if lang == "ru" { "Тёмная"  } else { "Dark"  }, true, saved_theme == "dark",  None::<&str>)?;
-            let ta = theme_auto.clone();
-            let tl = theme_light.clone();
-            let td = theme_dark.clone();
-
             let status_item = CheckMenuItem::with_id(handle, "status_bar", if lang == "ru" { "Строка состояния" } else { "Status Bar" }, true, saved_status, None::<&str>)?;
             let si = status_item.clone();
-            let sep_view = PredefinedMenuItem::separator(handle)?;
 
             let view_label = if lang == "ru" { "Вид" } else { "View" };
             let view_menu = Submenu::with_items(handle, view_label, true, &[
-                &theme_auto,
-                &theme_light,
-                &theme_dark,
-                &sep_view,
                 &status_item,
             ])?;
 
@@ -971,6 +992,7 @@ pub fn run() {
                     "print"      => { emit_to_focused(app, "menu-print", ()); }
                     "close_window" => { emit_to_focused(app, "menu-close-window", ()); }
                     "font_panel" => { emit_to_focused(app, "menu-font-panel", ()); }
+                    "settings" => { let _ = open_settings_window(&app); }
                     "edit_undo"       => { emit_to_focused(app, "menu-edit", "undo"); }
                     "edit_redo"       => { emit_to_focused(app, "menu-edit", "redo"); }
 
@@ -1021,16 +1043,6 @@ pub fn run() {
                         let _ = config::save(app, &cfg);
                         rebuild_recent_menu(app);
                     }
-                    "theme_auto" | "theme_light" | "theme_dark" => {
-                        let id = event.id().as_ref();
-                        let _ = ta.set_checked(id == "theme_auto");
-                        let _ = tl.set_checked(id == "theme_light");
-                        let _ = td.set_checked(id == "theme_dark");
-                        let payload = if id == "theme_light" { "light" }
-                                      else if id == "theme_dark" { "dark" }
-                                      else { "auto" };
-                        emit_to_focused(app, "menu-theme", payload);
-                    }
                     "word_wrap" => {
                         let new_state = !wrap_state_menu.load(Ordering::Relaxed);
                         wrap_state_menu.store(new_state, Ordering::Relaxed);
@@ -1051,7 +1063,7 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "font-panel" {
+                if window.label() == "font-panel" || window.label() == "settings" {
                     return;
                 }
                 let label = window.label().to_string();
@@ -1062,7 +1074,7 @@ pub fn run() {
                 let _ = window.emit_to(&label, "close-requested", ());
             }
             if let tauri::WindowEvent::Destroyed = event {
-                if window.label() == "font-panel" {
+                if window.label() == "font-panel" || window.label() == "settings" {
                     return;
                 }
                 window.state::<UntitledState>()
@@ -1083,6 +1095,7 @@ pub fn run() {
             get_font_list,
             open_font_panel,
             close_font_panel,
+            close_settings,
             get_word_wrap,
             set_word_wrap,
             get_status_bar,
