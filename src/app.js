@@ -5,6 +5,7 @@ const { ask } = window.__TAURI__.dialog;
 const { getCurrentWindow } = window.__TAURI__.window;
 
 const editor = document.getElementById("editor");
+const statLines = document.getElementById("stat-lines");
 const statWords = document.getElementById("stat-words");
 const statChars = document.getElementById("stat-chars");
 const statPos = document.getElementById("stat-pos");
@@ -33,6 +34,7 @@ function pluralRu(n, forms) {
 
 const T = {
   en: {
+    lines: (n) => `${n} line${n !== 1 ? "s" : ""}`,
     words: (n) => `${n} word${n !== 1 ? "s" : ""}`,
     chars: (n) => `${n} character${n !== 1 ? "s" : ""}`,
     unsaved: "Untitled",
@@ -42,6 +44,7 @@ const T = {
     no: "No",
   },
   ru: {
+    lines: (n) => `${n} ${pluralRu(n, ["строка", "строки", "строк"])}`,
     words: (n) => `${n} ${pluralRu(n, ["слово", "слова", "слов"])}`,
     chars: (n) => `${n} ${pluralRu(n, ["символ", "символа", "символов"])}`,
     unsaved: "Без имени",
@@ -98,6 +101,8 @@ function updateStatus() {
   const text = editor.value;
   const chars = [...text].length;
   const words = text.split(/\s+/).filter(Boolean).length;
+  const lines = text.split("\n").length;
+  statLines.textContent = t("lines", lines);
   statWords.textContent = t("words", words);
   statChars.textContent = t("chars", chars);
 }
