@@ -527,7 +527,7 @@ fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         tauri::WebviewUrl::App(std::path::PathBuf::from(url_str)),
     )
     .title("Настройки")
-    .inner_size(440.0, 200.0)
+    .inner_size(440.0, 260.0)
     .resizable(false)
     .minimizable(false)
     .visible(false);
@@ -586,6 +586,34 @@ fn set_status_bar(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
     let mut cfg = config::load(&app);
     cfg.status_bar = enabled;
     config::save(&app, &cfg)
+}
+
+#[tauri::command]
+fn get_show_counter(app: tauri::AppHandle) -> bool {
+    config::load(&app).show_counter
+}
+
+#[tauri::command]
+fn set_show_counter(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.show_counter = enabled;
+    if enabled && !cfg.status_bar {
+        cfg.status_bar = true;
+        config::save(&app, &cfg)?;
+        app.state::<StatusMenuState>().flag.store(true, Ordering::Relaxed);
+        let app2 = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let sms = app2.state::<StatusMenuState>();
+            if let Some(item) = sms.item.lock().unwrap().as_ref() {
+                let _ = item.set_checked(true);
+            };
+        });
+        emit_to_focused(&app, "menu-status-bar", true);
+    } else {
+        config::save(&app, &cfg)?;
+    }
+    emit_to_focused(&app, "menu-show-counter", enabled);
+    Ok(())
 }
 
 #[tauri::command]
@@ -825,6 +853,10 @@ struct QuitProgress {
     cancelled: bool,
 }
 struct QuitState(std::sync::Mutex<QuitProgress>);
+struct StatusMenuState {
+    item: std::sync::Mutex<Option<CheckMenuItem<tauri::Wry>>>,
+    flag: AtomicBool,
+}
 
 fn add_recent(app: &tauri::AppHandle, path: &str) {
     // обновить state: убрать дубликат, вставить в начало, обрезать до 10
@@ -891,6 +923,7 @@ pub fn run() {
         .manage(UntitledState(std::sync::Mutex::new(std::collections::HashMap::new())))
         .manage(CascadeState(std::sync::Mutex::new(None)))
         .manage(QuitState(std::sync::Mutex::new(QuitProgress { queue: Vec::new(), cancelled: false })))
+            .manage(StatusMenuState { item: std::sync::Mutex::new(None), flag: AtomicBool::new(false) })
         .setup(move |app| {
             let handle = app.handle();
             if let Some(main) = app.get_webview_window("main") {
@@ -994,7 +1027,11 @@ pub fn run() {
             ])?;
 
             let status_item = CheckMenuItem::with_id(handle, "status_bar", if lang == "ru" { "Строка состояния" } else { "Status Bar" }, true, saved_status, None::<&str>)?;
-            let si = status_item.clone();
+            {
+                let sms = app.state::<StatusMenuState>();
+                sms.flag.store(saved_status, Ordering::Relaxed);
+                *sms.item.lock().unwrap() = Some(status_item.clone());
+            }
 
             let view_label = if lang == "ru" { "Вид" } else { "View" };
             let view_menu = Submenu::with_items(handle, view_label, true, &[
@@ -1007,8 +1044,7 @@ pub fn run() {
             let wrap_state = std::sync::Arc::new(AtomicBool::new(saved_wrap));
             let wrap_state_menu = wrap_state.clone();
 
-            let status_state = std::sync::Arc::new(AtomicBool::new(saved_status));
-            let status_state_menu = status_state.clone();
+
 
             let font_panel_item = MenuItem::with_id(handle, "font_panel", if lang == "ru" { "Шрифт\u{2026}" } else { "Font\u{2026}" }, true, Some("cmd+t"))?;
             let sep_format = PredefinedMenuItem::separator(handle)?;
@@ -1140,9 +1176,12 @@ pub fn run() {
                         emit_to_focused(app, "menu-word-wrap", new_state);
                     }
                     "status_bar" => {
-                        let new_state = !status_state_menu.load(Ordering::Relaxed);
-                        status_state_menu.store(new_state, Ordering::Relaxed);
-                        let _ = si.set_checked(new_state);
+                        let sms = app.state::<StatusMenuState>();
+                        let new_state = !sms.flag.load(Ordering::Relaxed);
+                        sms.flag.store(new_state, Ordering::Relaxed);
+                        if let Some(item) = sms.item.lock().unwrap().as_ref() {
+                            let _ = item.set_checked(new_state);
+                        }
                         emit_to_focused(app, "menu-status-bar", new_state);
                     }
                     _ => {}
@@ -1192,6 +1231,8 @@ pub fn run() {
             set_use_tabs,
             get_status_bar,
             set_status_bar,
+            get_show_counter,
+            set_show_counter,
             set_dirty,
             claim_untitled_number,
             release_untitled_number,

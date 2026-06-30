@@ -14,6 +14,7 @@ pub struct Config {
     pub font_weight: String,
     pub font_style: String,
     pub use_tabs: bool,
+    pub show_counter: bool,
 }
 
 impl Default for Config {
@@ -29,6 +30,7 @@ impl Default for Config {
             font_weight: "normal".to_string(),
             font_style: "normal".to_string(),
             use_tabs: false,
+            show_counter: false,
         }
     }
 }

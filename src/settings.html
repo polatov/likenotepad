@@ -140,6 +140,10 @@
       <span class="row-label">Использовать вкладки</span>
       <div class="toggle" id="tabs-toggle" role="switch"></div>
     </div>
+    <div class="row">
+      <span class="row-label">Счётчик слов и символов</span>
+      <div class="toggle" id="counter-toggle" role="switch"></div>
+    </div>
   </div>
 <script>
   const invoke = window.__TAURI__.core.invoke;
@@ -193,6 +197,20 @@
 
   // Тумблер вкладок: состояние из конфига (async, после рендера — мерцания не даёт)
   invoke("get_use_tabs").then(setToggleState).catch((e) => console.error("get_use_tabs:", e));
+
+  // Тумблер «Счётчик слов и символов»
+  const counterToggle = document.getElementById("counter-toggle");
+  function setCounterState(on) {
+    counterToggle.classList.toggle("on", on);
+    counterToggle.setAttribute("aria-checked", on ? "true" : "false");
+  }
+  counterToggle.addEventListener("click", async () => {
+    const next = !counterToggle.classList.contains("on");
+    setCounterState(next);
+    try { await invoke("set_show_counter", { enabled: next }); }
+    catch (e) { console.error("set_show_counter:", e); }
+  });
+  invoke("get_show_counter").then(setCounterState).catch((e) => console.error("get_show_counter:", e));
 
   let shown = false;
   function showWindow() {

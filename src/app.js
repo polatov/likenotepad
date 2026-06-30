@@ -192,6 +192,10 @@ function applyStatusBar(visible) {
   document.getElementById("statusbar").style.display = visible ? "flex" : "none";
 }
 
+function applyShowCounter(visible) {
+  document.getElementById("stat-right").style.display = visible ? "flex" : "none";
+}
+
 // --- Find ---
 function openFind(mode = "find") {
   replaceMode = (mode === "replace");
@@ -509,6 +513,12 @@ async function init() {
         console.error("get_status_bar:", e);
       }
       try {
+        const savedCounter = await invoke("get_show_counter");
+        applyShowCounter(savedCounter);
+      } catch (e) {
+        console.error("get_show_counter:", e);
+      }
+      try {
         const [fontName, fontSize, fontWeight, fontStyle] = await invoke("get_font");
         editor.style.fontFamily = `"${fontName}", monospace`;
         editor.style.fontSize = `${fontSize}px`;
@@ -581,6 +591,9 @@ async function init() {
       } catch (err) {
         console.error("set_status_bar:", err);
       }
+    });
+    await listen("menu-show-counter", (e) => {
+      applyShowCounter(e.payload);
     });
     await getCurrentWindow().listen("menu-edit", async (e) => {
       switch (e.payload) {
