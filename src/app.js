@@ -92,6 +92,29 @@ function displayName() {
 
 function markDirty() { dirty = true; updateTitle(); syncDirty(); }
 function markClean() { dirty = false; updateTitle(); syncDirty(); }
+
+function dateStamp() {
+  const now = new Date();
+  const locale = lang === "ru" ? "ru-RU" : "en-US";
+  return now.toLocaleString(locale, {
+    day: "2-digit", month: "2-digit", year: "numeric",
+    hour: "2-digit", minute: "2-digit"
+  });
+}
+
+// Пасхалка .LOG: если первая строка файла ровно ".LOG", дописать штамп времени
+function applyLogStamp() {
+  const firstLine = editor.value.split("\n")[0].replace(/\r$/, "");
+  if (firstLine !== ".LOG") return;
+  editor.focus();
+  const end = editor.value.length;
+  editor.setSelectionRange(end, end);
+  document.execCommand("insertText", false, "\n" + dateStamp());
+  markDirty();
+  updateStatus();
+  updatePos();
+}
+
 function syncDirty() {
   try { invoke("set_dirty", { dirty }); } catch (e) {}
 }
@@ -128,6 +151,7 @@ async function openFile() {
   currentPath = path;
   await releaseUntitled();
   markClean();
+  applyLogStamp();
   updateStatus();
 }
 
@@ -566,6 +590,7 @@ async function init() {
       currentPath = path;
       await releaseUntitled();
       markClean();
+      applyLogStamp();
       updateStatus();
     });
     await listen("menu-theme", async (e) => {
@@ -607,12 +632,7 @@ async function init() {
         case "find-next": goToMatch(1); break;
         case "replace": openFind("replace"); break;
         case "datetime": {
-          const now = new Date();
-          const locale = lang === "ru" ? "ru-RU" : "en-US";
-          const stamp = now.toLocaleString(locale, {
-            day: "2-digit", month: "2-digit", year: "numeric",
-            hour: "2-digit", minute: "2-digit"
-          });
+          const stamp = dateStamp();
           editor.focus();
           // разорвать undo-серию, чтобы дата стала отдельной записью отмены
           const p = editor.selectionStart;
