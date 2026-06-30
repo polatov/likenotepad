@@ -1047,9 +1047,8 @@ pub fn run() {
 
 
             let font_panel_item = MenuItem::with_id(handle, "font_panel", if lang == "ru" { "Шрифт\u{2026}" } else { "Font\u{2026}" }, true, Some("cmd+t"))?;
-            let sep_format = PredefinedMenuItem::separator(handle)?;
             let format_label = if lang == "ru" { "Формат" } else { "Format" };
-            let format_menu = Submenu::with_items(handle, format_label, true, &[&font_panel_item, &sep_format, &wrap_item])?;
+            let format_menu = Submenu::with_items(handle, format_label, true, &[&wrap_item, &font_panel_item])?;
 
             let help_label = if lang == "ru" { "Справка" } else { "Help" };
             let help_menu = Submenu::with_id_and_items(handle, HELP_SUBMENU_ID, help_label, true, &[])?;
