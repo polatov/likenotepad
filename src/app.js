@@ -73,9 +73,10 @@ function updateTitle() {
     const base = t("unsaved");
     name = untitledNum > 1 ? `${base} ${untitledNum}` : base;
   }
-  const title = `${dirty ? "• " : ""}${name} — LikeNotepad.exe`;
+  const title = `${name} — LikeNotepad.exe`;
   document.title = title;
   getCurrentWindow().setTitle(title);
+  try { invoke("set_tab_title", { title: name }); } catch (e) {}
 }
 
 async function releaseUntitled() {

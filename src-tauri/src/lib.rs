@@ -142,6 +142,18 @@ fn disable_tabbing(window: &tauri::WebviewWindow) {
     }
 }
 
+#[tauri::command]
+fn set_tab_title(window: tauri::Window, title: String) {
+    if let Ok(ptr) = window.ns_window() {
+        unsafe {
+            let ns_window = &*(ptr as *const NSWindow);
+            let tab = &ns_window.tab();
+            let ns_title = objc2_foundation::NSString::from_str(&title);
+            tab.setTitle(Some(&ns_title));
+        }
+    }
+}
+
 fn set_tabbing_preferred(window: &tauri::WebviewWindow) {
     if let Ok(ptr) = window.ns_window() {
         unsafe {
@@ -621,6 +633,12 @@ fn set_dirty(window: tauri::Window, dirty: bool) {
     window.state::<DirtyState>()
         .0.lock().unwrap()
         .insert(window.label().to_string(), dirty);
+    if let Ok(ptr) = window.ns_window() {
+        unsafe {
+            let ns_window = &*(ptr as *const NSWindow);
+            ns_window.setDocumentEdited(dirty);
+        }
+    }
 }
 
 #[tauri::command]
@@ -1233,6 +1251,7 @@ pub fn run() {
             get_show_counter,
             set_show_counter,
             set_dirty,
+            set_tab_title,
             claim_untitled_number,
             release_untitled_number,
             confirm_close,
