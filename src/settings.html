@@ -144,6 +144,10 @@
       <span class="row-label">Счётчик слов и символов</span>
       <div class="toggle" id="counter-toggle" role="switch"></div>
     </div>
+    <div class="row">
+      <span class="row-label">Заголовок из первой строки</span>
+      <div class="toggle" id="autoname-toggle" role="switch"></div>
+    </div>
   </div>
 <script>
   const invoke = window.__TAURI__.core.invoke;
@@ -211,6 +215,22 @@
     catch (e) { console.error("set_show_counter:", e); }
   });
   invoke("get_show_counter").then(setCounterState).catch((e) => console.error("get_show_counter:", e));
+
+  // Тумблер «Заголовок из первой строки»
+  const autonameToggle = document.getElementById("autoname-toggle");
+  function setAutonameState(on) {
+    autonameToggle.classList.toggle("on", on);
+    autonameToggle.setAttribute("aria-checked", on ? "true" : "false");
+  }
+  autonameToggle.addEventListener("click", async () => {
+    const next = !autonameToggle.classList.contains("on");
+    setAutonameState(next);
+    try { await invoke("set_auto_name", { enabled: next }); }
+    catch (e) { console.error("set_auto_name:", e); }
+    try { await emit("menu-auto-name", next); }
+    catch (e) { console.error("emit menu-auto-name:", e); }
+  });
+  invoke("get_auto_name").then(setAutonameState).catch((e) => console.error("get_auto_name:", e));
 
   let shown = false;
   function showWindow() {

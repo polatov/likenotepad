@@ -539,7 +539,7 @@ fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         tauri::WebviewUrl::App(std::path::PathBuf::from(url_str)),
     )
     .title("Настройки")
-    .inner_size(440.0, 260.0)
+    .inner_size(440.0, 320.0)
     .resizable(false)
     .minimizable(false)
     .visible(false);
@@ -625,6 +625,34 @@ fn set_show_counter(app: tauri::AppHandle, enabled: bool) -> Result<(), String> 
         config::save(&app, &cfg)?;
     }
     emit_to_focused(&app, "menu-show-counter", enabled);
+    Ok(())
+}
+
+#[tauri::command]
+fn get_auto_name(app: tauri::AppHandle) -> bool {
+    config::load(&app).auto_name
+}
+
+#[tauri::command]
+fn set_auto_name(app: tauri::AppHandle, enabled: bool) -> Result<(), String> {
+    let mut cfg = config::load(&app);
+    cfg.auto_name = enabled;
+    if enabled && !cfg.status_bar {
+        cfg.status_bar = true;
+        config::save(&app, &cfg)?;
+        app.state::<StatusMenuState>().flag.store(true, Ordering::Relaxed);
+        let app2 = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            let sms = app2.state::<StatusMenuState>();
+            if let Some(item) = sms.item.lock().unwrap().as_ref() {
+                let _ = item.set_checked(true);
+            };
+        });
+        emit_to_focused(&app, "menu-status-bar", true);
+    } else {
+        config::save(&app, &cfg)?;
+    }
+    emit_to_focused(&app, "menu-auto-name", enabled);
     Ok(())
 }
 
@@ -1250,6 +1278,8 @@ pub fn run() {
             set_status_bar,
             get_show_counter,
             set_show_counter,
+            get_auto_name,
+            set_auto_name,
             set_dirty,
             set_tab_title,
             claim_untitled_number,

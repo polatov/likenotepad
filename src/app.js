@@ -66,13 +66,7 @@ let dirty = false;
 let untitledNum = 0;
 
 function updateTitle() {
-  let name;
-  if (currentPath) {
-    name = currentPath.split("/").pop();
-  } else {
-    const base = t("unsaved");
-    name = untitledNum > 1 ? `${base} ${untitledNum}` : base;
-  }
+  const name = displayName();
   const title = `${name} — LikeNotepad.exe`;
   document.title = title;
   getCurrentWindow().setTitle(title);
@@ -85,8 +79,23 @@ async function releaseUntitled() {
   try { await invoke("release_untitled_number"); } catch (e) {}
 }
 
+let autoNameEnabled = false;
+
+function autoNameRaw() {
+  if (currentPath) return null;
+  if (!autoNameEnabled) return null;
+  const first = (editor.value.split("\n")[0] || "").replace(/\r$/, "").trim();
+  return first || null;
+}
+
+function truncateName(s, max) {
+  return s.length > max ? s.slice(0, max) + "…" : s;
+}
+
 function displayName() {
   if (currentPath) return currentPath.split("/").pop();
+  const auto = autoNameRaw();
+  if (auto) return truncateName(auto, 40);
   const base = t("unsaved");
   return untitledNum > 1 ? `${base} ${untitledNum}` : base;
 }
@@ -164,7 +173,13 @@ async function saveFile() {
 }
 
 async function saveFileAs() {
-  const suggestedName = currentPath ? currentPath.split("/").pop() : `${displayName()}.txt`;
+  let suggestedName;
+  if (currentPath) {
+    suggestedName = currentPath.split("/").pop();
+  } else {
+    const auto = autoNameRaw();
+    suggestedName = (auto ? auto.replace(/[\/\\]/g, "-") : displayName()) + ".txt";
+  }
   const result = await invoke("save_file_as", { content: editor.value, suggestedName });
   if (!result) return false;
   currentPath = result;
@@ -544,6 +559,12 @@ async function init() {
         console.error("get_show_counter:", e);
       }
       try {
+        autoNameEnabled = await invoke("get_auto_name");
+        updateTitle();
+      } catch (e) {
+        console.error("get_auto_name:", e);
+      }
+      try {
         const [fontName, fontSize, fontWeight, fontStyle] = await invoke("get_font");
         editor.style.fontFamily = `"${fontName}", monospace`;
         editor.style.fontSize = `${fontSize}px`;
@@ -620,6 +641,10 @@ async function init() {
     });
     await listen("menu-show-counter", (e) => {
       applyShowCounter(e.payload);
+    });
+    await listen("menu-auto-name", (e) => {
+      autoNameEnabled = e.payload;
+      updateTitle();
     });
     await getCurrentWindow().listen("menu-edit", async (e) => {
       switch (e.payload) {
