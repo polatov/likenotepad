@@ -149,6 +149,15 @@ function updatePos() {
 }
 
 // --- File operations ---
+function loadFileIntoEditor(path, content) {
+  editor.value = content;
+  currentPath = path;
+  releaseUntitled();
+  markClean();
+  applyLogStamp();
+  updateStatus();
+}
+
 async function openFile() {
   if (dirty) {
     const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), okLabel: t("yes"), cancelLabel: t("no"), kind: "warning" });
@@ -157,12 +166,7 @@ async function openFile() {
   const result = await invoke("open_file");
   if (!result) return;
   const [path, content] = result;
-  editor.value = content;
-  currentPath = path;
-  await releaseUntitled();
-  markClean();
-  applyLogStamp();
-  updateStatus();
+  loadFileIntoEditor(path, content);
 }
 
 async function saveFile() {
@@ -573,6 +577,15 @@ async function init() {
       } catch (e) {
         console.error("get_font:", e);
       }
+      try {
+        const pending = await invoke("take_pending_file");
+        if (pending) {
+          const [path, content] = pending;
+          loadFileIntoEditor(path, content);
+        }
+      } catch (e) {
+        console.error("take_pending_file:", e);
+      }
     } finally {
       try {
         await getCurrentWindow().show();
@@ -583,6 +596,18 @@ async function init() {
     await getCurrentWindow().listen("menu-close-window", handleCloseRequested);
     await getCurrentWindow().listen("quit-save-window", handleQuitSaveWindow);
     await getCurrentWindow().listen("menu-open", openFile);
+    await getCurrentWindow().listen("pending-file-ready", async () => {
+      if (dirty) return;
+      try {
+        const pending = await invoke("take_pending_file");
+        if (pending) {
+          const [path, content] = pending;
+          loadFileIntoEditor(path, content);
+        }
+      } catch (e) {
+        console.error("pending-file-ready:", e);
+      }
+    });
     await getCurrentWindow().listen("menu-save", saveFile);
     await getCurrentWindow().listen("menu-save-as", saveFileAs);
     await getCurrentWindow().listen("menu-font-panel", async () => {
@@ -608,12 +633,7 @@ async function init() {
         const ok = await ask(t("confirmNew"), { title: t("confirmNewTitle"), okLabel: t("yes"), cancelLabel: t("no"), kind: "warning" });
         if (!ok) return;
       }
-      editor.value = content;
-      currentPath = path;
-      await releaseUntitled();
-      markClean();
-      applyLogStamp();
-      updateStatus();
+      loadFileIntoEditor(path, content);
     });
     await listen("menu-theme", async (e) => {
       setTheme(e.payload);

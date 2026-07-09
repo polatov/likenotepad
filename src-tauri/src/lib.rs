@@ -185,20 +185,21 @@ fn cascade_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
                 Some((x, y)) => NSPoint::new(x, y),
                 // первая точка стопки: top-left главного окна в Cocoa-координатах
                 None => {
-                    if let Some(main) = app.get_webview_window("main") {
-                        if let Ok(mptr) = main.ns_window() {
-                            let mwin = &*(mptr as *const NSWindow);
-                            let f = mwin.frame();
-                            // frame.origin = bottom-left; top-left.y = origin.y + height.
-                            // Смещаем на один шаг каскада (+25,-25 в Cocoa: вправо и вниз
-                            // экранно), иначе первое окно ляжет ровно поверх main.
-                            NSPoint::new(f.origin.x + 25.0, f.origin.y + f.size.height - 25.0)
-                        } else {
-                            NSPoint::new(0.0, 0.0)
-                        }
+                    let base_frame = if let Some(main) = app.get_webview_window("main") {
+                        main.ns_window().ok().map(|mptr| (*(mptr as *const NSWindow)).frame())
                     } else {
-                        NSPoint::new(0.0, 0.0)
-                    }
+                        None
+                    };
+                    // Если main недоступен (холодный старт из Finder: main ещё
+                    // не создан) — базой служит фрейм САМОГО нового окна: оно
+                    // стоит на той же дефолтной позиции, где встанет будущий
+                    // main. NSPoint(0,0) нельзя: cascadeTopLeftFromPoint с
+                    // нулевой точкой не двигает окно вообще.
+                    let f = base_frame.unwrap_or_else(|| ns_window.frame());
+                    // frame.origin = bottom-left; top-left.y = origin.y + height.
+                    // Смещаем на один шаг каскада (+25,-25 в Cocoa: вправо и вниз
+                    // экранно), иначе первое окно ляжет ровно поверх базового.
+                    NSPoint::new(f.origin.x + 25.0, f.origin.y + f.size.height - 25.0)
                 }
             };
 
@@ -273,6 +274,81 @@ fn new_standalone_window(app: &tauri::AppHandle) {
             cascade_window(app, &win);
         }
         Err(e) => eprintln!("new_standalone_window error: {e}"),
+    }
+}
+
+fn open_file_in_new_window(app: &tauri::AppHandle, path: String, content: String) {
+    let use_tabs = crate::config::load(app).use_tabs;
+    let host = if use_tabs {
+        app.webview_windows()
+            .into_iter()
+            .find(|(_, w)| w.is_focused().unwrap_or(false))
+            .map(|(_, w)| w)
+    } else {
+        None
+    };
+
+    let n = WINDOW_COUNTER.fetch_add(1, Ordering::Relaxed) + 1;
+    let label = format!("win-{}", n);
+
+    match tauri::WebviewWindowBuilder::new(app, label.clone(), tauri::WebviewUrl::App("index.html".into()))
+        .title("LikeNotepad.exe")
+        .inner_size(800.0, 600.0)
+        .min_inner_size(400.0, 300.0)
+        .resizable(true)
+        .decorations(true)
+        .visible(false)
+        .build()
+    {
+        Ok(win) => {
+            app.state::<PendingFileState>().0.lock().unwrap().insert(label, (path, content));
+            if use_tabs {
+                set_tabbing_preferred(&win);
+                if let Some(h) = host {
+                    set_tabbing_preferred(&h);
+                    attach_as_tab(&h, &win);
+                }
+            } else {
+                disable_tabbing(&win);
+                cascade_window(app, &win);
+            }
+        }
+        Err(e) => eprintln!("open_file_in_new_window error: {e}"),
+    }
+}
+
+fn handle_opened_urls(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
+    let mut first = true;
+    for url in urls {
+        let Ok(path) = url.to_file_path() else {
+            eprintln!("[opened] skip non-file url: {url}");
+            continue;
+        };
+        let path_str = path.to_string_lossy().to_string();
+        let content = match read_file_content(&path_str) {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("[opened] read error: {e}");
+                continue;
+            }
+        };
+        add_recent(app, &path_str);
+
+        if first {
+            first = false;
+            // Только холодный старт (main физически ещё не существует) грузит
+            // файл прямо в main. Если main уже открыт (даже пустой) — всегда
+            // новое окно, как TextEdit. Пустое main не трогаем осознанно.
+            if app.webview_windows().is_empty() {
+                app.state::<PendingFileState>()
+                    .0
+                    .lock()
+                    .unwrap()
+                    .insert("main".to_string(), (path_str, content));
+                continue;
+            }
+        }
+        open_file_in_new_window(app, path_str, content);
     }
 }
 
@@ -554,6 +630,12 @@ fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
 
     builder.build()?;
     Ok(())
+}
+
+#[tauri::command]
+fn take_pending_file(window: tauri::WebviewWindow) -> Option<(String, String)> {
+    let app = window.app_handle();
+    app.state::<PendingFileState>().0.lock().unwrap().remove(window.label())
 }
 
 #[tauri::command]
@@ -894,6 +976,7 @@ struct DirtyState(std::sync::Mutex<std::collections::HashMap<String, bool>>);
 
 struct UntitledState(std::sync::Mutex<std::collections::HashMap<String, u32>>);
 struct CascadeState(std::sync::Mutex<Option<(f64, f64)>>);
+struct PendingFileState(std::sync::Mutex<std::collections::HashMap<String, (String, String)>>);
 struct QuitProgress {
     queue: Vec<String>,
     cancelled: bool,
@@ -968,6 +1051,7 @@ pub fn run() {
         .manage(DirtyState(std::sync::Mutex::new(std::collections::HashMap::new())))
         .manage(UntitledState(std::sync::Mutex::new(std::collections::HashMap::new())))
         .manage(CascadeState(std::sync::Mutex::new(None)))
+        .manage(PendingFileState(std::sync::Mutex::new(std::collections::HashMap::new())))
         .manage(QuitState(std::sync::Mutex::new(QuitProgress { queue: Vec::new(), cancelled: false })))
             .manage(StatusMenuState { item: std::sync::Mutex::new(None), flag: AtomicBool::new(false) })
         .setup(move |app| {
@@ -1270,6 +1354,7 @@ pub fn run() {
             open_font_panel,
             close_font_panel,
             close_settings,
+            take_pending_file,
             get_word_wrap,
             set_word_wrap,
             get_use_tabs,
@@ -1292,6 +1377,11 @@ pub fn run() {
             confirm_quit_window,
             cancel_quit,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app_handle, event| {
+            if let tauri::RunEvent::Opened { urls } = event {
+                handle_opened_urls(app_handle, urls);
+            }
+        });
 }
