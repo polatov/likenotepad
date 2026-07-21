@@ -435,29 +435,29 @@
 <div id="findbar" hidden>
   <div id="findbar-row1">
     <div id="find-field">
-      <input id="find-input" type="text" placeholder="Найти" spellcheck="false" autocomplete="off">
+      <input id="find-input" type="text" placeholder="Find" data-i18n-ph="findPlaceholder" spellcheck="false" autocomplete="off">
       <span id="find-count"></span>
     </div>
     <div id="find-actions">
-      <button id="find-prev" title="Предыдущее (⌘⇧G)">‹</button>
-      <button id="find-next" title="Следующее (⌘G)">›</button>
-      <button id="find-case" title="Учитывать регистр">Aa</button>
-      <button id="find-close" title="Закрыть">✕</button>
+      <button id="find-prev" title="Previous (⌘⇧G)" data-i18n-title="findPrev">‹</button>
+      <button id="find-next" title="Next (⌘G)" data-i18n-title="findNext">›</button>
+      <button id="find-case" title="Match case" data-i18n-title="matchCase">Aa</button>
+      <button id="find-close" title="Close" data-i18n-title="close">✕</button>
     </div>
   </div>
   <div id="findbar-row2" hidden>
     <div id="replace-field">
-      <input id="replace-input" type="text" placeholder="Заменить на" spellcheck="false" autocomplete="off">
+      <input id="replace-input" type="text" placeholder="Replace with" data-i18n-ph="replacePlaceholder" spellcheck="false" autocomplete="off">
     </div>
     <div id="replace-actions">
-      <button id="replace-one">Заменить</button>
-      <button id="replace-all">Заменить всё</button>
+      <button id="replace-one" data-i18n="replaceOne">Replace</button>
+      <button id="replace-all" data-i18n="replaceAll">Replace All</button>
     </div>
   </div>
 </div>
 <div id="gotobar" hidden>
-  <input id="goto-input" type="number" min="1" placeholder="Номер строки" spellcheck="false" autocomplete="off">
-  <button id="goto-close" title="Закрыть">✕</button>
+  <input id="goto-input" type="number" min="1" placeholder="Line number" data-i18n-ph="gotoPlaceholder" spellcheck="false" autocomplete="off">
+  <button id="goto-close" title="Close" data-i18n-title="close">✕</button>
 </div>
 <div id="editor-wrap">
   <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
@@ -473,6 +473,7 @@
 </div>
 
 
+<script src="i18n.js"></script>
 <script type="module" src="app.js"></script>
 </body>
 </html>

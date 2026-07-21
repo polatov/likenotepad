@@ -17,48 +17,18 @@ const findClose = document.getElementById("find-close");
 const gotobar = document.getElementById("gotobar");
 const gotoInput = document.getElementById("goto-input");
 
-// --- i18n ---
-let lang = "en";
+// Словарь вынесен в i18n.js (общий для всех окон), подключён в index.html
+// обычным <script> ПЕРЕД этим модулем — window.I18N готов к моменту старта.
+const lang = window.I18N.lang;
 let findbarNavMode = false;
 let windowShown = false;
 let isHandlingClose = false;
 let isHandlingQuit = false;
 
-function pluralRu(n, forms) {
-  const n100 = n % 100, n10 = n % 10;
-  if (n100 >= 11 && n100 <= 14) return forms[2];
-  if (n10 === 1) return forms[0];
-  if (n10 >= 2 && n10 <= 4) return forms[1];
-  return forms[2];
-}
+const t = (key, ...args) => window.I18N.t(key, ...args);
 
-const T = {
-  en: {
-    lines: (n) => `${n} line${n !== 1 ? "s" : ""}`,
-    words: (n) => `${n} word${n !== 1 ? "s" : ""}`,
-    chars: (n) => `${n} character${n !== 1 ? "s" : ""}`,
-    unsaved: "Untitled",
-    confirmNew: "Discard unsaved changes?",
-    confirmNewTitle: "New",
-    yes: "Yes",
-    no: "No",
-  },
-  ru: {
-    lines: (n) => `${n} ${pluralRu(n, ["строка", "строки", "строк"])}`,
-    words: (n) => `${n} ${pluralRu(n, ["слово", "слова", "слов"])}`,
-    chars: (n) => `${n} ${pluralRu(n, ["символ", "символа", "символов"])}`,
-    unsaved: "Без имени",
-    confirmNew: "Отменить несохранённые изменения?",
-    confirmNewTitle: "Новый",
-    yes: "Да",
-    no: "Нет",
-  },
-};
-
-function t(key, arg) {
-  const v = T[lang]?.[key] ?? T.en[key];
-  return typeof v === 'function' ? v(arg) : v;
-}
+// Перевод статического текста панелей (data-i18n атрибуты в index.html)
+window.I18N.localizeDOM();
 
 // --- State ---
 let currentPath = null;
@@ -105,7 +75,7 @@ function markClean() { dirty = false; updateTitle(); syncDirty(); }
 
 function dateStamp() {
   const now = new Date();
-  const locale = lang === "ru" ? "ru-RU" : "en-US";
+  const locale = window.I18N.locale;
   return now.toLocaleString(locale, {
     day: "2-digit", month: "2-digit", year: "numeric",
     hour: "2-digit", minute: "2-digit"
@@ -145,7 +115,7 @@ function updatePos() {
   const before = editor.value.slice(0, pos);
   const line = before.split("\n").length;
   const col = pos - before.lastIndexOf("\n");
-  statPos.textContent = (lang === "ru" ? `Лн ${line}, Ст ${col}` : `Ln ${line}, Col ${col}`);
+  statPos.textContent = t("lnCol", line, col);
 }
 
 // --- File operations ---
@@ -340,7 +310,7 @@ function goToMatch(direction) {
   editor.setSelectionRange(idx, idx + term.length);
   scrollEditorToSelection(idx);
 
-  findCount.textContent = (pos + 1) + (lang === "ru" ? " из " : " of ") + matches.length + (lang === "ru" ? " совпадений" : " matches");
+  findCount.textContent = t("findPos", pos + 1, matches.length);
 }
 
 // Скроллит textarea к позиции offset через зеркальный div с тем же шрифтом/wrap.
@@ -512,9 +482,9 @@ async function init() {
     }
     const matches = findAllMatches();
     if (matches.length === 0) {
-      findCount.textContent = lang === "ru" ? "Нет совпадений" : "No matches";
+      findCount.textContent = t("noMatches");
     } else {
-      findCount.textContent = matches.length + (lang === "ru" ? " совпадений" : " matches");
+      findCount.textContent = t("findCount", matches.length);
     }
   });
   document.getElementById("find-prev").addEventListener("click", () => goToMatch(-1));
@@ -535,7 +505,6 @@ async function init() {
   document.getElementById("goto-close").addEventListener("click", closeGoto);
   document.addEventListener("selectionchange", () => { if (document.activeElement === editor) updatePos(); });
   try {
-    lang = navigator.language.toLowerCase().startsWith("ru") ? "ru" : "en";
     console.log("[lang]", lang, navigator.language);
     try {
       try {
