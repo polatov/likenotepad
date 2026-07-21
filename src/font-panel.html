@@ -2,7 +2,7 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Шрифт</title>
+<title>Font</title>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 body {
@@ -158,46 +158,51 @@ body.theme-dark {
 
 <div class="columns">
   <div class="col col-font">
-    <div class="col-label">Шрифт:</div>
-    <input type="text" id="font-search" placeholder="Поиск"
+    <div class="col-label" data-i18n="fontLabel">Font:</div>
+    <input type="text" id="font-search" placeholder="Search" data-i18n-ph="searchPlaceholder"
            autocomplete="off" spellcheck="false" tabindex="1">
     <ul id="font-families" tabindex="-1"></ul>
   </div>
   <div class="col col-face">
-    <div class="col-label">Начертание:</div>
+    <div class="col-label" data-i18n="styleLabel">Style:</div>
     <input type="text" id="face-display" tabindex="2" autocomplete="off" spellcheck="false">
     <ul id="font-faces" tabindex="-1"></ul>
   </div>
   <div class="col col-size">
-    <div class="col-label">Размер:</div>
+    <div class="col-label" data-i18n="sizeLabel">Size:</div>
     <input type="number" id="size-input" min="6" max="144" tabindex="3">
     <ul id="font-sizes" tabindex="-1"></ul>
   </div>
 </div>
 
 <div class="script-row">
-  <label for="script-select">Набор:</label>
+  <label for="script-select" data-i18n="scriptLabel">Collection:</label>
   <select id="script-select" tabindex="4">
-    <option value="all">Все шрифты</option>
-    <option value="monospaced">Моноширинные</option>
-    <option value="serif">С засечками</option>
-    <option value="sans">Без засечек</option>
-    <option value="russian">Русский (кириллица)</option>
+    <option value="all" data-i18n="scriptAll">All Fonts</option>
+    <option value="monospaced" data-i18n="scriptMono">Monospaced</option>
+    <option value="serif" data-i18n="scriptSerif">Serif</option>
+    <option value="sans" data-i18n="scriptSans">Sans Serif</option>
+    <option value="russian" data-i18n="scriptCyrillic">Cyrillic</option>
   </select>
 </div>
 
-<div class="preview-label">Образец</div>
+<div class="preview-label" data-i18n="sample">Sample</div>
 <div class="preview-box" id="preview">AaBbЯяZz</div>
 
 <div class="btn-row">
-  <button class="btn" id="btn-cancel" tabindex="5">Отмена</button>
+  <button class="btn" id="btn-cancel" tabindex="5" data-i18n="cancel">Cancel</button>
   <button class="btn btn-ok" id="btn-ok" tabindex="6">OK</button>
 </div>
 
+<script src="i18n.js"></script>
 <script>
 (function() {
   const invoke = window.__TAURI__.core.invoke;
   const { getCurrentWindow } = window.__TAURI__.window;
+
+  // Перевод статического текста (data-i18n) до показа окна — без мигания
+  window.I18N.localizeDOM();
+  document.title = window.I18N.t("fontTitle");
 
   // Тема из URL-параметра
   const params = new URLSearchParams(window.location.search);
