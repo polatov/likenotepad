@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
 <meta charset="UTF-8">
-<title>Настройки</title>
+<title>Settings</title>
 <style>
   :root {
     --bg: #ECECEC;
@@ -129,26 +129,27 @@
 <body>
   <div class="card">
     <div class="row">
-      <span class="row-label">Тема</span>
+      <span class="row-label" data-i18n="theme">Theme</span>
       <div class="segment" role="radiogroup">
-        <button class="seg" data-theme="auto">Авто</button>
-        <button class="seg" data-theme="light">Светлая</button>
-        <button class="seg" data-theme="dark">Тёмная</button>
+        <button class="seg" data-theme="auto" data-i18n="themeAuto">Auto</button>
+        <button class="seg" data-theme="light" data-i18n="themeLight">Light</button>
+        <button class="seg" data-theme="dark" data-i18n="themeDark">Dark</button>
       </div>
     </div>
     <div class="row">
-      <span class="row-label">Использовать вкладки</span>
+      <span class="row-label" data-i18n="useTabs">Use tabs</span>
       <div class="toggle" id="tabs-toggle" role="switch"></div>
     </div>
     <div class="row">
-      <span class="row-label">Счётчик строк, слов и символов</span>
+      <span class="row-label" data-i18n="showCounter">Line, word, and character count</span>
       <div class="toggle" id="counter-toggle" role="switch"></div>
     </div>
     <div class="row">
-      <span class="row-label">Заголовок из первой строки</span>
+      <span class="row-label" data-i18n="autoName">Title from first line</span>
       <div class="toggle" id="autoname-toggle" role="switch"></div>
     </div>
   </div>
+<script src="i18n.js"></script>
 <script>
   const invoke = window.__TAURI__.core.invoke;
   const { emit } = window.__TAURI__.event;
@@ -193,6 +194,10 @@
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") { invoke("close_settings"); }
   });
+
+  // Перевод статического текста (data-i18n) до показа окна — без мигания
+  window.I18N.localizeDOM();
+  document.title = window.I18N.t("settingsTitle");
 
   // Init: тема из URL → применить ДО show (анти-FOUC)
   const initial = new URLSearchParams(location.search).get("theme") || "auto";
