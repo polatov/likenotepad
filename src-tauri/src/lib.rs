@@ -1,4 +1,5 @@
 mod config;
+mod i18n;
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use tauri::{
@@ -59,38 +60,16 @@ fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, pa
 // Возврат: 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
 fn show_quit_alert(count: usize, lang: &str) -> isize {
     autoreleasepool(|_| {
-        let plural_doc = |n: usize| -> &'static str {
-            let n100 = n % 100;
-            let n10 = n % 10;
-            if n100 >= 11 && n100 <= 14 { "документов" }
-            else if n10 == 1 { "документ" }
-            else if n10 >= 2 && n10 <= 4 { "документа" }
-            else { "документов" }
-        };
-        let (msg, info, b_save, b_dont, b_cancel) = if lang == "ru" {
-            let msg = if count == 1 {
-                "Имеется несохранённый документ.".to_string()
-            } else {
-                format!("Имеется {} несохранённых {}.", count, plural_doc(count))
-            };
-            (
-                msg,
-                "Хотите сохранить изменения перед завершением? Несохранённые изменения будут потеряны.".to_string(),
-                "Сохранить…", "Не сохранять", "Отмена",
-            )
-        } else {
-            let (n_word, doc_word) = if count == 1 { ("one", "document") } else { ("several", "documents") };
-            (
-                format!("You have {} {} with unsaved changes.", n_word, doc_word),
-                "Do you want to save your changes before quitting? Your changes will be lost if you don't save.".to_string(),
-                "Save…", "Don't Save", "Cancel",
-            )
-        };
+        let msg = i18n::quit_alert_msg(lang, count);
+        let info = i18n::mt(lang, "quit_info");
+        let b_save = i18n::mt(lang, "alert_save");
+        let b_dont = i18n::mt(lang, "alert_dont_save");
+        let b_cancel = i18n::mt(lang, "alert_cancel");
         let mtm = MainThreadMarker::new().unwrap();
         let alert = NSAlert::new(mtm);
         alert.setAlertStyle(NSAlertStyle::Warning);
         alert.setMessageText(&NSString::from_str(&msg));
-        alert.setInformativeText(&NSString::from_str(&info));
+        alert.setInformativeText(&NSString::from_str(info));
         alert.addButtonWithTitle(&NSString::from_str(b_save));
         alert.addButtonWithTitle(&NSString::from_str(b_dont));
         let cancel_btn = alert.addButtonWithTitle(&NSString::from_str(b_cancel));
@@ -106,24 +85,16 @@ fn show_quit_alert(count: usize, lang: &str) -> isize {
 // Возврат: 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
 fn show_close_alert(name: &str, lang: &str) -> isize {
     autoreleasepool(|_| {
-        let (msg, info, b_save, b_dont, b_cancel) = if lang == "ru" {
-            (
-                format!("Сохранить изменения в «{}»?", name),
-                "Если не сохранить, изменения будут потеряны.".to_string(),
-                "Сохранить…", "Не сохранять", "Отмена",
-            )
-        } else {
-            (
-                format!("Do you want to save the changes you made to \"{}\"?", name),
-                "Your changes will be lost if you don't save them.".to_string(),
-                "Save…", "Don't Save", "Cancel",
-            )
-        };
+        let msg = i18n::close_alert_msg(lang, name);
+        let info = i18n::mt(lang, "close_info");
+        let b_save = i18n::mt(lang, "alert_save");
+        let b_dont = i18n::mt(lang, "alert_dont_save");
+        let b_cancel = i18n::mt(lang, "alert_cancel");
         let mtm = MainThreadMarker::new().unwrap();
         let alert = NSAlert::new(mtm);
         alert.setAlertStyle(NSAlertStyle::Warning);
         alert.setMessageText(&NSString::from_str(&msg));
-        alert.setInformativeText(&NSString::from_str(&info));
+        alert.setInformativeText(&NSString::from_str(info));
         alert.addButtonWithTitle(&NSString::from_str(b_save));
         alert.addButtonWithTitle(&NSString::from_str(b_dont));
         let cancel_btn = alert.addButtonWithTitle(&NSString::from_str(b_cancel));
@@ -352,15 +323,8 @@ fn handle_opened_urls(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
     }
 }
 
-// Detect system language: returns "ru" or "en"
-fn system_lang() -> &'static str {
-    let locale = sys_locale::get_locale().unwrap_or_default();
-    if locale.to_lowercase().starts_with("ru") {
-        "ru"
-    } else {
-        "en"
-    }
-}
+// Детект языка живёт в i18n.rs — там же, где таблицы переводов.
+use i18n::system_lang;
 
 #[tauri::command]
 fn get_lang() -> String {
@@ -575,7 +539,7 @@ async fn open_font_panel(app: tauri::AppHandle) -> Result<(), String> {
         "font-panel",
         tauri::WebviewUrl::App(std::path::PathBuf::from(url_str)),
     )
-    .title("Шрифт")
+    .title(i18n::mt(system_lang(), "font_title"))
     .inner_size(460.0, 380.0)
     .resizable(false)
     .minimizable(false)
@@ -614,7 +578,7 @@ fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
         "settings",
         tauri::WebviewUrl::App(std::path::PathBuf::from(url_str)),
     )
-    .title("Настройки")
+    .title(i18n::mt(system_lang(), "settings_title"))
     .inner_size(440.0, 320.0)
     .resizable(false)
     .minimizable(false)
@@ -1022,7 +986,7 @@ fn rebuild_recent_menu(app: &tauri::AppHandle) {
     while let Ok(Some(_)) = submenu.remove_at(0) {}
     let lang = system_lang();
     if recent.is_empty() {
-        let empty = MenuItem::with_id(app, "recent_empty", if lang == "ru" { "Нет недавних файлов" } else { "No Recent Files" }, false, None::<&str>).unwrap();
+        let empty = MenuItem::with_id(app, "recent_empty", i18n::mt(lang, "no_recent"), false, None::<&str>).unwrap();
         let _ = submenu.append(&empty);
         return;
     }
@@ -1034,7 +998,7 @@ fn rebuild_recent_menu(app: &tauri::AppHandle) {
     }
     let sep = PredefinedMenuItem::separator(app).unwrap();
     let _ = submenu.append(&sep);
-    let clear = MenuItem::with_id(app, "clear_recent", if lang == "ru" { "Очистить меню" } else { "Clear Menu" }, true, None::<&str>).unwrap();
+    let clear = MenuItem::with_id(app, "clear_recent", i18n::mt(lang, "clear_recent"), true, None::<&str>).unwrap();
     let _ = submenu.append(&clear);
 }
 
@@ -1068,12 +1032,8 @@ pub fn run() {
             *app.state::<RecentFilesState>().0.lock().unwrap() = cfg.recent_files.clone();
 
             // Build native menu
-            let about_label = if lang == "ru" { "О программе LikeNotepad.exe" } else { "About LikeNotepad.exe" };
-            let comments = if lang == "ru" {
-                "Тот самый Блокнот, но без Windows. Никаких облаков, подписок и ИИ. Просто текст"
-            } else {
-                "The same Notepad, but without Windows. No clouds, no subscriptions, no AI. Just text"
-            };
+            let about_label = i18n::mt(lang, "about");
+            let comments = i18n::mt(lang, "about_comments");
             let about_item = PredefinedMenuItem::about(handle, Some(about_label), Some(AboutMetadata {
                 name:          Some("LikeNotepad.exe".to_string()),
                 version:       Some("0.1.0".to_string()),
@@ -1082,31 +1042,32 @@ pub fn run() {
                 website:       Some("https://polatov.me".to_string()),
                 website_label: Some("https://polatov.me".to_string()),
                 comments:      Some(comments.to_string()),
+                credits:       Some(comments.to_string()),
                 ..Default::default()
             }))?;
             let sep_app = PredefinedMenuItem::separator(handle)?;
-            let quit_label = if lang == "ru" { "Завершить LikeNotepad.exe" } else { "Quit LikeNotepad.exe" };
+            let quit_label = i18n::mt(lang, "quit");
             let quit_item = MenuItem::with_id(handle, "quit", quit_label, true, Some("CmdOrCtrl+Q"))?;
-            let settings_label = if lang == "ru" { "Настройки\u{2026}" } else { "Settings\u{2026}" };
+            let settings_label = i18n::mt(lang, "settings");
             let settings_item = MenuItem::with_id(handle, "settings", settings_label, true, Some("CmdOrCtrl+Comma"))?;
             let sep_settings = PredefinedMenuItem::separator(handle)?;
             let app_menu = Submenu::with_items(handle, "LikeNotepad.exe", true, &[&about_item, &sep_app, &settings_item, &sep_settings, &quit_item])?;
 
-            let new_item = MenuItem::with_id(handle, "new", if lang == "ru" { "Создать" } else { "New" }, true, Some("CmdOrCtrl+N"))?;
-            let new_window_item = MenuItem::with_id(handle, "new_window", if lang == "ru" { "Новое окно" } else { "New Window" }, true, Some("CmdOrCtrl+Shift+N"))?;
-            let open_item = MenuItem::with_id(handle, "open", if lang == "ru" { "Открыть..." } else { "Open..." }, true, Some("CmdOrCtrl+O"))?;
-            let recent_label = if lang == "ru" { "Открыть недавние" } else { "Open Recent" };
+            let new_item = MenuItem::with_id(handle, "new", i18n::mt(lang, "new"), true, Some("CmdOrCtrl+N"))?;
+            let new_window_item = MenuItem::with_id(handle, "new_window", i18n::mt(lang, "new_window"), true, Some("CmdOrCtrl+Shift+N"))?;
+            let open_item = MenuItem::with_id(handle, "open", i18n::mt(lang, "open"), true, Some("CmdOrCtrl+O"))?;
+            let recent_label = i18n::mt(lang, "open_recent");
             let recent_submenu = Submenu::with_id(handle, "recent_submenu", recent_label, true)?;
-            let save_item = MenuItem::with_id(handle, "save", if lang == "ru" { "Сохранить" } else { "Save" }, true, Some("CmdOrCtrl+S"))?;
-            let save_as_item = MenuItem::with_id(handle, "save_as", if lang == "ru" { "Сохранить как..." } else { "Save As..." }, true, Some("CmdOrCtrl+Shift+S"))?;
+            let save_item = MenuItem::with_id(handle, "save", i18n::mt(lang, "save"), true, Some("CmdOrCtrl+S"))?;
+            let save_as_item = MenuItem::with_id(handle, "save_as", i18n::mt(lang, "save_as"), true, Some("CmdOrCtrl+Shift+S"))?;
             let sep = PredefinedMenuItem::separator(handle)?;
             let sep_before_print = PredefinedMenuItem::separator(handle)?;
-            let page_setup_item = MenuItem::with_id(handle, "page_setup", if lang == "ru" { "Параметры страницы..." } else { "Page Setup..." }, true, Some("CmdOrCtrl+Shift+P"))?;
-            let print_item = MenuItem::with_id(handle, "print", if lang == "ru" { "Печать..." } else { "Print..." }, true, Some("CmdOrCtrl+P"))?;
+            let page_setup_item = MenuItem::with_id(handle, "page_setup", i18n::mt(lang, "page_setup"), true, Some("CmdOrCtrl+Shift+P"))?;
+            let print_item = MenuItem::with_id(handle, "print", i18n::mt(lang, "print"), true, Some("CmdOrCtrl+P"))?;
             let sep_close = PredefinedMenuItem::separator(handle)?;
-            let close_item = MenuItem::with_id(handle, "close_window", if lang == "ru" { "Закрыть" } else { "Close" }, true, Some("CmdOrCtrl+W"))?;
+            let close_item = MenuItem::with_id(handle, "close_window", i18n::mt(lang, "close"), true, Some("CmdOrCtrl+W"))?;
 
-            let file_label = if lang == "ru" { "Файл" } else { "File" };
+            let file_label = i18n::mt(lang, "file");
             let file_menu = Submenu::with_items(handle, file_label, true, &[
                 &new_item,
                 &new_window_item,
@@ -1123,22 +1084,22 @@ pub fn run() {
             ])?;
             app.state::<RecentMenuState>().0.lock().unwrap().replace(recent_submenu.clone());
 
-            let undo       = MenuItem::with_id(handle, "edit_undo",       if lang == "ru" { "Отменить"     } else { "Undo"        }, true, Some("CmdOrCtrl+Z"))?;
-            let redo       = MenuItem::with_id(handle, "edit_redo",       if lang == "ru" { "Повторить"    } else { "Redo"        }, true, Some("CmdOrCtrl+Shift+Z"))?;
+            let undo       = MenuItem::with_id(handle, "edit_undo",       i18n::mt(lang, "undo"), true, Some("CmdOrCtrl+Z"))?;
+            let redo       = MenuItem::with_id(handle, "edit_redo",       i18n::mt(lang, "redo"), true, Some("CmdOrCtrl+Shift+Z"))?;
             let sep2 = PredefinedMenuItem::separator(handle)?;
-            let cut        = PredefinedMenuItem::cut(handle, Some(if lang == "ru" { "Вырезать"     } else { "Cut"        }))?;
-            let copy       = PredefinedMenuItem::copy(handle, Some(if lang == "ru" { "Копировать"   } else { "Copy"       }))?;
-            let paste      = PredefinedMenuItem::paste(handle, Some(if lang == "ru" { "Вставить"     } else { "Paste"      }))?;
+            let cut        = PredefinedMenuItem::cut(handle, Some(i18n::mt(lang, "cut")))?;
+            let copy       = PredefinedMenuItem::copy(handle, Some(i18n::mt(lang, "copy")))?;
+            let paste      = PredefinedMenuItem::paste(handle, Some(i18n::mt(lang, "paste")))?;
             let sep3 = PredefinedMenuItem::separator(handle)?;
-            let select_all = PredefinedMenuItem::select_all(handle, Some(if lang == "ru" { "Выделить всё" } else { "Select All" }))?;
-            let find_item = MenuItem::with_id(handle, "edit_find", if lang == "ru" { "Найти..." } else { "Find..." }, true, Some("CmdOrCtrl+F"))?;
-            let find_next_item = MenuItem::with_id(handle, "edit_find_next", if lang == "ru" { "Найти далее" } else { "Find Next" }, true, Some("CmdOrCtrl+G"))?;
-            let replace_item = MenuItem::with_id(handle, "edit_replace", if lang == "ru" { "Заменить..." } else { "Replace..." }, true, Some("CmdOrCtrl+Alt+F"))?;
-            let goto_item = MenuItem::with_id(handle, "edit_goto", if lang == "ru" { "Перейти..." } else { "Go to..." }, true, Some("CmdOrCtrl+L"))?;
+            let select_all = PredefinedMenuItem::select_all(handle, Some(i18n::mt(lang, "select_all")))?;
+            let find_item = MenuItem::with_id(handle, "edit_find", i18n::mt(lang, "find"), true, Some("CmdOrCtrl+F"))?;
+            let find_next_item = MenuItem::with_id(handle, "edit_find_next", i18n::mt(lang, "find_next"), true, Some("CmdOrCtrl+G"))?;
+            let replace_item = MenuItem::with_id(handle, "edit_replace", i18n::mt(lang, "replace"), true, Some("CmdOrCtrl+Alt+F"))?;
+            let goto_item = MenuItem::with_id(handle, "edit_goto", i18n::mt(lang, "goto"), true, Some("CmdOrCtrl+L"))?;
             let sep4 = PredefinedMenuItem::separator(handle)?;
-            let datetime_item = MenuItem::with_id(handle, "edit_datetime", if lang == "ru" { "Время/Дата" } else { "Time/Date" }, true, Some("CmdOrCtrl+Shift+T"))?;
+            let datetime_item = MenuItem::with_id(handle, "edit_datetime", i18n::mt(lang, "datetime"), true, Some("CmdOrCtrl+Shift+T"))?;
 
-            let edit_label = if lang == "ru" { "Правка" } else { "Edit" };
+            let edit_label = i18n::mt(lang, "edit");
             let edit_menu = Submenu::with_items(handle, edit_label, true, &[
                 &undo,
                 &redo,
@@ -1156,19 +1117,19 @@ pub fn run() {
                 &datetime_item,
             ])?;
 
-            let status_item = CheckMenuItem::with_id(handle, "status_bar", if lang == "ru" { "Строка состояния" } else { "Status Bar" }, true, saved_status, None::<&str>)?;
+            let status_item = CheckMenuItem::with_id(handle, "status_bar", i18n::mt(lang, "status_bar"), true, saved_status, None::<&str>)?;
             {
                 let sms = app.state::<StatusMenuState>();
                 sms.flag.store(saved_status, Ordering::Relaxed);
                 *sms.item.lock().unwrap() = Some(status_item.clone());
             }
 
-            let view_label = if lang == "ru" { "Вид" } else { "View" };
+            let view_label = i18n::mt(lang, "view");
             let view_menu = Submenu::with_items(handle, view_label, true, &[
                 &status_item,
             ])?;
 
-            let wrap_label = if lang == "ru" { "Перенос по словам" } else { "Word Wrap" };
+            let wrap_label = i18n::mt(lang, "word_wrap");
             let wrap_item = CheckMenuItem::with_id(handle, "word_wrap", wrap_label, true, saved_wrap, None::<&str>)?;
             let wi = wrap_item.clone();
             let wrap_state = std::sync::Arc::new(AtomicBool::new(saved_wrap));
@@ -1176,11 +1137,11 @@ pub fn run() {
 
 
 
-            let font_panel_item = MenuItem::with_id(handle, "font_panel", if lang == "ru" { "Шрифт\u{2026}" } else { "Font\u{2026}" }, true, Some("cmd+t"))?;
-            let format_label = if lang == "ru" { "Формат" } else { "Format" };
+            let font_panel_item = MenuItem::with_id(handle, "font_panel", i18n::mt(lang, "font"), true, Some("cmd+t"))?;
+            let format_label = i18n::mt(lang, "format");
             let format_menu = Submenu::with_items(handle, format_label, true, &[&wrap_item, &font_panel_item])?;
 
-            let help_label = if lang == "ru" { "Справка" } else { "Help" };
+            let help_label = i18n::mt(lang, "help");
             let help_menu = Submenu::with_id_and_items(handle, HELP_SUBMENU_ID, help_label, true, &[])?;
 
             let menu = Menu::with_items(handle, &[&app_menu, &file_menu, &edit_menu, &format_menu, &view_menu, &help_menu])?;
