@@ -356,6 +356,32 @@ async fn open_file(app: AppHandle) -> Result<Option<(String, String)>, String> {
     }
 }
 
+#[tauri::command]
+async fn open_file_new_window(app: AppHandle) -> Result<(), String> {
+    let last_dir = config::load(&app).last_dir;
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let mut builder = app.dialog()
+        .file()
+        .add_filter("Text", &["txt", "md", "log", "csv"]);
+    if let Some(dir) = &last_dir {
+        builder = builder.set_directory(dir);
+    }
+    builder.pick_file(move |path| {
+        let _ = tx.send(path);
+    });
+    let path = rx.await.map_err(|e| e.to_string())?;
+    if let Some(FilePath::Path(p)) = path {
+        let path_str = p.to_string_lossy().to_string();
+        let content = read_file_content(&path_str)?;
+        add_recent(&app, &path_str);
+        let app2 = app.clone();
+        app.run_on_main_thread(move || {
+            open_file_in_new_window(&app2, path_str, content);
+        }).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
 fn read_file_content(path: &str) -> Result<String, String> {
     let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
     let content = String::from_utf8(bytes).unwrap_or_else(|e| {
@@ -1201,7 +1227,12 @@ pub fn run() {
                     }
                     "new" => { new_window(app); }
                     "new_window" => { new_standalone_window(app); }
-                    "open" => { emit_to_focused(app, "menu-open", ()); }
+                    "open" => {
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let _ = open_file_new_window(app).await;
+                        });
+                    }
                     "save" => { emit_to_focused(app, "menu-save", ()); }
                     "save_as"    => { emit_to_focused(app, "menu-save-as", ()); }
                     "page_setup" => { emit_to_focused(app, "menu-page-setup", ()); }
@@ -1303,6 +1334,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_lang,
             open_file,
+            open_file_new_window,
             save_file,
             save_file_as,
             get_theme,

@@ -165,7 +165,7 @@ async function saveFileAs() {
 // --- Keyboard shortcuts ---
 document.addEventListener("keydown", (e) => {
   if ((e.metaKey || e.ctrlKey) && !e.altKey) {
-    if (e.key === "o" || e.key === "O") { e.preventDefault(); openFile(); }
+    if (e.key === "o" || e.key === "O") { e.preventDefault(); invoke("open_file_new_window"); }
     else if (e.key === "s" || e.key === "S") {
       e.preventDefault();
       if (e.shiftKey) saveFileAs(); else saveFile();
