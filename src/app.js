@@ -314,7 +314,8 @@ function goToMatch(direction) {
 }
 
 // Скроллит textarea к позиции offset через зеркальный div с тем же шрифтом/wrap.
-function scrollEditorToSelection(offset) {
+// Общее построение зеркального div с computed styles editor.
+function buildEditorMirror() {
   const ta = editor;
   const cs = window.getComputedStyle(ta);
   const mirror = document.createElement("div");
@@ -332,6 +333,13 @@ function scrollEditorToSelection(offset) {
   mirror.style.top = "0";
   mirror.style.left = "0";
   document.body.appendChild(mirror);
+  return mirror;
+}
+
+function scrollEditorToSelection(offset) {
+  const ta = editor;
+  const cs = window.getComputedStyle(ta);
+  const mirror = buildEditorMirror();
 
   const before = ta.value.substring(0, offset);
   mirror.textContent = before;
@@ -342,7 +350,6 @@ function scrollEditorToSelection(offset) {
   const markerTop = marker.offsetTop;
   document.body.removeChild(mirror);
 
-  // Скроллим так, чтобы совпадение было в видимой области с отступом.
   const lineH = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
   const visibleTop = ta.scrollTop;
   const visibleBottom = visibleTop + ta.clientHeight;
@@ -350,6 +357,94 @@ function scrollEditorToSelection(offset) {
   if (markerTop < visibleTop || markerTop + lineH > visibleBottom) {
     ta.scrollTop = Math.max(0, markerTop - ta.clientHeight / 3);
   }
+}
+
+// Обратный маппинг Y → символьный offset (конец логической строки под этой Y).
+// targetY — в координатах контента (scrollTop уже учтён до вызова).
+function offsetAtContentY(targetY) {
+  const ta = editor;
+  const val = ta.value;
+  const mirror = buildEditorMirror();
+  const marker = document.createElement("span");
+  marker.textContent = "\u200b";
+  let bestOffset = 0;
+  let lineStart = 0;
+  while (true) {
+    mirror.textContent = val.substring(0, lineStart);
+    mirror.appendChild(marker);
+    const top = marker.offsetTop;
+    if (top <= targetY) {
+      const nl = val.indexOf("\n", lineStart);
+      bestOffset = nl === -1 ? val.length : nl;
+    } else {
+      break;
+    }
+    const nl = val.indexOf("\n", lineStart);
+    if (nl === -1) break;
+    lineStart = nl + 1;
+  }
+  document.body.removeChild(mirror);
+  return bestOffset;
+}
+
+// Начало логической строки под данной Y (координаты контента).
+// Для якоря drag-выделения: тянем от начала строки, где был клик.
+function offsetAtLineStartY(targetY) {
+  const ta = editor;
+  const val = ta.value;
+  const mirror = buildEditorMirror();
+  const marker = document.createElement("span");
+  marker.textContent = "​";
+  let lineStart = 0;
+  let chosen = 0;
+  while (true) {
+    mirror.textContent = val.substring(0, lineStart);
+    mirror.appendChild(marker);
+    if (marker.offsetTop <= targetY) {
+      chosen = lineStart;
+    } else {
+      break;
+    }
+    const nl = val.indexOf("\n", lineStart);
+    if (nl === -1) break;
+    lineStart = nl + 1;
+  }
+  document.body.removeChild(mirror);
+  return chosen;
+}
+
+// ---- Drag-autoscroll по обеим осям: WKWebView не автоскроллит textarea
+// при протягивании выделения тачпадом за границу. Ведём scroll + selection сами. ----
+let dragAnchor = null;
+let dragActive = false;
+let dragPointerY = 0;
+let dragRaf = null;
+
+function dragAutoscrollStep() {
+  if (!dragActive) { dragRaf = null; return; }
+  const ta = editor;
+  const rect = ta.getBoundingClientRect();
+  const y = dragPointerY;
+
+  let outY = 0;
+  if (y < rect.top) outY = y - rect.top;
+  else if (y > rect.bottom) outY = y - rect.bottom;
+
+  if (outY !== 0) {
+    const speedY = Math.min(40, 2 + Math.abs(outY) * 0.35);
+    ta.scrollTop = Math.max(0, ta.scrollTop + (outY < 0 ? -1 : 1) * speedY);
+
+    const cssPadT = parseFloat(getComputedStyle(ta).paddingTop) || 0;
+    const csY = (outY < 0 ? ta.scrollTop
+              : ta.scrollTop + ta.clientHeight - 1) + cssPadT;
+    const off = offsetAtContentY(csY);
+    if (dragAnchor !== null) {
+      if (off >= dragAnchor) ta.setSelectionRange(dragAnchor, off);
+      else ta.setSelectionRange(off, dragAnchor);
+      updatePos();
+    }
+  }
+  dragRaf = requestAnimationFrame(dragAutoscrollStep);
 }
 
 function doReplace() {
@@ -447,7 +542,32 @@ async function init() {
   // Живой клик/печать в editor выключает режим навигации по Enter:
   // после этого Enter в тексте = перенос строки, а не "найти далее".
   // Программный editor.focus() из goToMatch события mousedown не шлёт — флаг переживает.
-  editor.addEventListener("mousedown", () => { findbarNavMode = false; });
+  editor.addEventListener("mousedown", (e) => {
+    findbarNavMode = false;
+    dragActive = true;
+    dragPointerY = e.clientY;
+    // Якорь считаем САМИ из Y клика — selectionStart в этот момент ещё
+    // хранит прошлое выделение, а после WebKit его переоценивает.
+    const rect = editor.getBoundingClientRect();
+    const padT = parseFloat(getComputedStyle(editor).paddingTop) || 0;
+    const clickY = editor.scrollTop + (e.clientY - rect.top) + padT;
+    dragAnchor = offsetAtLineStartY(clickY);
+  });
+  function stopDrag() {
+    dragActive = false;
+    dragAnchor = null;
+    if (dragRaf !== null) { cancelAnimationFrame(dragRaf); dragRaf = null; }
+  }
+  document.addEventListener("mousemove", (e) => {
+    if (!dragActive) return;
+    // Кнопка отпущена, но mouseup не долетел (трекпад за границей окна) — глушим.
+    if (e.buttons === 0) { stopDrag(); return; }
+    dragPointerY = e.clientY;
+    if (dragRaf === null) dragRaf = requestAnimationFrame(dragAutoscrollStep);
+  });
+  document.addEventListener("mouseup", stopDrag);
+  document.addEventListener("mouseleave", stopDrag);
+  window.addEventListener("blur", stopDrag);
   editor.addEventListener("keydown", (e) => {
     // Не сбрасываем режим навигации на: Enter (обрабатывает capture-листенер),
     // хоткеи (Cmd/Ctrl/Alt) и чистые модификаторы (Shift/Ctrl/Alt/Meta сами
