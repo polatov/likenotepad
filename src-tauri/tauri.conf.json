@@ -42,7 +42,10 @@
         "description": "Text Document",
         "role": "Editor"
       }
-    ]
+    ],
+    "resources": {
+      "infoplist/": "./"
+    }
   },
   "plugins": {}
 }
