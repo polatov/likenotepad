@@ -247,6 +247,33 @@
     gap: 12px;
   }
 
+  /* ── Контекстное меню редактора (кастомное, вместо системного WKWebView) ── */
+  #ctx-menu {
+    position: fixed;
+    min-width: 180px;
+    background: var(--panel-bg);
+    border: 1px solid var(--panel-border);
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.22);
+    padding: 4px;
+    z-index: 300;
+    font-size: 13px;
+  }
+  #ctx-menu[hidden] { display: none; }
+  .ctx-item {
+    padding: 5px 10px;
+    border-radius: 4px;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .ctx-item:hover { background: var(--hover-bg); }
+  .ctx-sep {
+    height: 1px;
+    background: var(--panel-border);
+    margin: 4px 2px;
+  }
+
   /* ── Font Panel (floating) ── */
   #font-panel {
     position: fixed;
@@ -461,6 +488,16 @@
 </div>
 <div id="editor-wrap">
   <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
+</div>
+<div id="ctx-menu" hidden>
+  <div class="ctx-item" data-action="undo" data-i18n="undo">Undo</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="cut" data-i18n="cut">Cut</div>
+  <div class="ctx-item" data-action="copy" data-i18n="copy">Copy</div>
+  <div class="ctx-item" data-action="paste" data-i18n="paste">Paste</div>
+  <div class="ctx-item" data-action="delete" data-i18n="delete">Delete</div>
+  <div class="ctx-sep"></div>
+  <div class="ctx-item" data-action="selectAll" data-i18n="selectAll">Select All</div>
 </div>
 <div id="statusbar">
   <span id="stat-pos"></span>

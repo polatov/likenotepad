@@ -11,6 +11,7 @@ const statChars = document.getElementById("stat-chars");
 const statPos = document.getElementById("stat-pos");
 
 const findbar = document.getElementById("findbar");
+const ctxMenu = document.getElementById("ctx-menu");
 const findInput = document.getElementById("find-input");
 const findCount = document.getElementById("find-count");
 const findClose = document.getElementById("find-close");
@@ -178,6 +179,10 @@ document.addEventListener("keydown", (e) => {
   else if (e.key === "Escape" && !findbar.hidden) {
     e.preventDefault();
     closeFind();
+  }
+  else if (e.key === "Escape" && !ctxMenu.hidden) {
+    e.preventDefault();
+    hideCtxMenu();
   }
 });
 
@@ -820,4 +825,66 @@ setTimeout(() => {
 async function openFontPanel() {
   await invoke("open_font_panel");
 }
+
+// --- Контекстное меню редактора (кастомное, вместо системного WKWebView) ---
+function showCtxMenu(x, y) {
+  ctxMenu.hidden = false;
+  const rect = ctxMenu.getBoundingClientRect();
+  const maxX = window.innerWidth - rect.width - 4;
+  const maxY = window.innerHeight - rect.height - 4;
+  ctxMenu.style.left = Math.min(x, maxX) + "px";
+  ctxMenu.style.top = Math.min(y, maxY) + "px";
+}
+
+function hideCtxMenu() {
+  ctxMenu.hidden = true;
+}
+
+function ctxAction(action) {
+  hideCtxMenu();
+  editor.focus();
+  if (action === "paste") {
+    invoke("plugin:clipboard-manager|read_text").then((text) => {
+      if (text) {
+        document.execCommand("insertText", false, text);
+        markDirty();
+        updateStatus();
+        updatePos();
+      }
+    }).catch((err) => console.error("paste:", err));
+    return;
+  }
+  switch (action) {
+    case "undo": document.execCommand("undo"); break;
+    case "cut": document.execCommand("cut"); markDirty(); break;
+    case "copy": document.execCommand("copy"); break;
+    case "delete":
+      if (editor.selectionStart !== editor.selectionEnd) {
+        document.execCommand("insertText", false, "");
+        markDirty();
+      }
+      break;
+    case "selectAll": editor.select(); break;
+  }
+  updateStatus();
+  updatePos();
+}
+
+editor.addEventListener("mousedown", (e) => {
+  if (e.button === 2) e.preventDefault();
+});
+
+editor.addEventListener("contextmenu", (e) => {
+  e.preventDefault();
+  showCtxMenu(e.clientX, e.clientY);
+});
+
+ctxMenu.addEventListener("click", (e) => {
+  const item = e.target.closest(".ctx-item");
+  if (item) ctxAction(item.dataset.action);
+});
+
+document.addEventListener("mousedown", (e) => {
+  if (!ctxMenu.hidden && !ctxMenu.contains(e.target)) hideCtxMenu();
+});
 

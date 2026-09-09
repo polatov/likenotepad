@@ -22,6 +22,13 @@
   const L = {
     en: {
       locale: "en-US",
+      undo: "Undo",
+      redo: "Redo",
+      cut: "Cut",
+      copy: "Copy",
+      paste: "Paste",
+      selectAll: "Select All",
+      delete: "Delete",
       lines: (n) => `${n} ${pTwo(n, ["line", "lines"])}`,
       words: (n) => `${n} ${pTwo(n, ["word", "words"])}`,
       chars: (n) => `${n} ${pTwo(n, ["character", "characters"])}`,
@@ -69,6 +76,13 @@
 
     ru: {
       locale: "ru-RU",
+      undo: "Отменить",
+      redo: "Повторить",
+      cut: "Вырезать",
+      copy: "Копировать",
+      paste: "Вставить",
+      selectAll: "Выделить всё",
+      delete: "Удалить",
       lines: (n) => `${n} ${pRu(n, ["строка", "строки", "строк"])}`,
       words: (n) => `${n} ${pRu(n, ["слово", "слова", "слов"])}`,
       chars: (n) => `${n} ${pRu(n, ["символ", "символа", "символов"])}`,
@@ -116,6 +130,13 @@
 
     es: {
       locale: "es-ES",
+      undo: "Deshacer",
+      redo: "Rehacer",
+      cut: "Cortar",
+      copy: "Copiar",
+      paste: "Pegar",
+      selectAll: "Seleccionar todo",
+      delete: "Eliminar",
       lines: (n) => `${n} ${pTwo(n, ["línea", "líneas"])}`,
       words: (n) => `${n} ${pTwo(n, ["palabra", "palabras"])}`,
       chars: (n) => `${n} ${pTwo(n, ["carácter", "caracteres"])}`,
@@ -163,6 +184,13 @@
 
     de: {
       locale: "de-DE",
+      undo: "Widerrufen",
+      redo: "Wiederholen",
+      cut: "Ausschneiden",
+      copy: "Kopieren",
+      paste: "Einsetzen",
+      selectAll: "Alles auswählen",
+      delete: "Löschen",
       lines: (n) => `${n} ${pTwo(n, ["Zeile", "Zeilen"])}`,
       words: (n) => `${n} ${pTwo(n, ["Wort", "Wörter"])}`,
       chars: (n) => `${n} ${pTwo(n, ["Zeichen", "Zeichen"])}`,
@@ -210,6 +238,13 @@
 
     fr: {
       locale: "fr-FR",
+      undo: "Annuler",
+      redo: "Rétablir",
+      cut: "Couper",
+      copy: "Copier",
+      paste: "Coller",
+      selectAll: "Tout sélectionner",
+      delete: "Supprimer",
       lines: (n) => `${n} ${pFr(n, ["ligne", "lignes"])}`,
       words: (n) => `${n} ${pFr(n, ["mot", "mots"])}`,
       chars: (n) => `${n} ${pFr(n, ["caractère", "caractères"])}`,
@@ -257,6 +292,13 @@
 
     zh: {
       locale: "zh-CN",
+      undo: "撤销",
+      redo: "重做",
+      cut: "剪切",
+      copy: "拷贝",
+      paste: "粘贴",
+      selectAll: "全选",
+      delete: "删除",
       lines: (n) => `${n} 行`,
       words: (n) => `${n} 词`,
       chars: (n) => `${n} 字符`,
@@ -304,6 +346,13 @@
 
     ja: {
       locale: "ja-JP",
+      undo: "取り消す",
+      redo: "やり直す",
+      cut: "カット",
+      copy: "コピー",
+      paste: "ペースト",
+      selectAll: "すべてを選択",
+      delete: "削除",
       lines: (n) => `${n} 行`,
       words: (n) => `${n} 単語`,
       chars: (n) => `${n} 文字`,
@@ -351,6 +400,13 @@
 
     pt: {
       locale: "pt-BR",
+      undo: "Desfazer",
+      redo: "Refazer",
+      cut: "Recortar",
+      copy: "Copiar",
+      paste: "Colar",
+      selectAll: "Selecionar tudo",
+      delete: "Excluir",
       lines: (n) => `${n} ${pTwo(n, ["linha", "linhas"])}`,
       words: (n) => `${n} ${pTwo(n, ["palavra", "palavras"])}`,
       chars: (n) => `${n} ${pTwo(n, ["caractere", "caracteres"])}`,
