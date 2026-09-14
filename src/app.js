@@ -628,7 +628,17 @@ async function init() {
     else if (e.key === "Escape") { e.preventDefault(); closeGoto(); }
   });
   document.getElementById("goto-close").addEventListener("click", closeGoto);
-  document.addEventListener("selectionchange", () => { if (document.activeElement === editor) updatePos(); });
+  document.addEventListener("selectionchange", () => {
+    if (document.activeElement !== editor) return;
+    updatePos();
+    // Форс-репейнт: WebKit оставляет непрокрашенный шов на границах внутренних
+    // тайлов отрисовки текста в textarea при выделении (не лечится translateZ/
+    // will-change). Микро-сдвиг scrollTop туда-обратно форсирует WebKit
+    // перерисовать видимую область целиком.
+    const st = editor.scrollTop;
+    editor.scrollTop = st + 1;
+    editor.scrollTop = st;
+  });
   try {
     console.log("[lang]", lang, navigator.language);
     try {
@@ -668,6 +678,7 @@ async function init() {
         editor.style.fontSize = `${fontSize}px`;
         editor.style.fontWeight = fontWeight;
         editor.style.fontStyle = fontStyle;
+        editor.style.lineHeight = `${Math.round(fontSize * 1.6)}px`;
       } catch (e) {
         console.error("get_font:", e);
       }
@@ -713,6 +724,7 @@ async function init() {
       editor.style.fontSize = `${size}px`;
       editor.style.fontWeight = weight;
       editor.style.fontStyle = style;
+      editor.style.lineHeight = `${Math.round(size * 1.6)}px`;
     });
     await getCurrentWindow().listen("menu-page-setup", async () => {
       await invoke("page_setup");
