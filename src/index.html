@@ -173,7 +173,10 @@
     color: var(--status-text);
     cursor: pointer;
     font-size: 12px;
-    padding: 2px 6px;
+    /* Асимметричный паддинг опускает «Aa» на полпикселя: без него базовая линия
+       заглавных на 0.5px выше, чем у ‹ › (замер в WKWebView @2x). Рамка кнопки
+       при этом остаётся на месте. */
+    padding: 2.5px 6px 1.5px;
     line-height: 1;
   }
   #find-case:hover { color: var(--text); }
