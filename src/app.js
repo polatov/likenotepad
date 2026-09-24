@@ -392,43 +392,158 @@ function offsetAtContentY(targetY) {
   return bestOffset;
 }
 
-// Начало логической строки под данной Y (координаты контента).
-// Для якоря drag-выделения: тянем от начала строки, где был клик.
-function offsetAtLineStartY(targetY) {
-  const ta = editor;
-  const val = ta.value;
-  const mirror = buildEditorMirror();
-  const marker = document.createElement("span");
-  marker.textContent = "​";
-  let lineStart = 0;
-  let chosen = 0;
-  while (true) {
-    mirror.textContent = val.substring(0, lineStart);
-    mirror.appendChild(marker);
-    if (marker.offsetTop <= targetY) {
-      chosen = lineStart;
-    } else {
-      break;
-    }
-    const nl = val.indexOf("\n", lineStart);
-    if (nl === -1) break;
-    lineStart = nl + 1;
-  }
-  document.body.removeChild(mirror);
-  return chosen;
-}
-
 // ---- Drag-autoscroll по обеим осям: WKWebView не автоскроллит textarea
 // при протягивании выделения тачпадом за границу. Ведём scroll + selection сами. ----
 let dragAnchor = null;
 let dragActive = false;
+let dragPointerX = 0;
 let dragPointerY = 0;
 let dragRaf = null;
+// Опорная точка клика для горизонтали (Word Wrap OFF): X клика в координатах
+// контента и X якоря в зеркале. Колонку фокуса считаем от неё, а не от начала
+// строки/документа — так внутренний отступ текста textarea (которого нет в
+// зеркале) сокращается сам.
+let dragRef = null;
+let dragClick = null;
+let dragLineStarts = null;
+let dragMeasure = null;
+
+function autoscrollSpeed(out) {
+  return Math.min(40, 2 + Math.abs(out) * 0.35);
+}
+
+function lineStartsOf(val) {
+  const starts = [0];
+  for (let i = val.indexOf("\n"); i !== -1; i = val.indexOf("\n", i + 1)) starts.push(i + 1);
+  return starts;
+}
+
+// Зеркало одной строки для замера X границы символа (табы и широкие символы
+// учитываются самим движком, моноширинность не предполагаем).
+function makeLineMeasure() {
+  const cs = window.getComputedStyle(editor);
+  const el = document.createElement("span");
+  el.style.position = "absolute";
+  el.style.visibility = "hidden";
+  el.style.whiteSpace = "pre";
+  el.style.font = cs.font;
+  el.style.letterSpacing = cs.letterSpacing;
+  el.style.tabSize = cs.tabSize;
+  el.style.top = "0";
+  el.style.left = "0";
+  document.body.appendChild(el);
+  const node = document.createTextNode("");
+  el.appendChild(node);
+  const range = document.createRange();
+  let current = null;
+  return {
+    xAt(text, col) {
+      if (text !== current) { node.data = text; current = text; }
+      range.setStart(node, col);
+      range.setEnd(node, col);
+      return range.getBoundingClientRect().left - el.getBoundingClientRect().left;
+    },
+    // Ближайшая к x граница символа в строке.
+    colAt(text, x) {
+      let lo = 0, hi = text.length;
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (this.xAt(text, mid + 1) <= x) lo = mid + 1; else hi = mid;
+      }
+      if (lo < text.length) {
+        const left = this.xAt(text, lo), right = this.xAt(text, lo + 1);
+        if (x - left > right - x) lo += 1;
+      }
+      return lo;
+    },
+    destroy() { el.remove(); },
+  };
+}
+
+function lineText(val, starts, idx) {
+  const s = starts[idx];
+  const e = idx + 1 < starts.length ? starts[idx + 1] - 1 : val.length;
+  return val.substring(s, e);
+}
+
+// Шаг автоскролла при Word Wrap OFF: скроллим по обеим осям и ставим фокус
+// выделения в строку/колонку под указателем (прижатым к видимой области).
+function dragAutoscrollStepNoWrap(rect) {
+  const ta = editor;
+  const x = dragPointerX, y = dragPointerY;
+  let outX = 0, outY = 0;
+  if (x < rect.left) outX = x - rect.left;
+  else if (x > rect.right) outX = x - rect.right;
+  if (y < rect.top) outY = y - rect.top;
+  else if (y > rect.bottom) outY = y - rect.bottom;
+  if (outX === 0 && outY === 0) return;
+  if (dragAnchor === null || dragClick === null) return;
+  if (dragRef === null) computeDragRef();
+
+  if (outX !== 0) ta.scrollLeft = Math.max(0, ta.scrollLeft + Math.sign(outX) * autoscrollSpeed(outX));
+  if (outY !== 0) ta.scrollTop = Math.max(0, ta.scrollTop + Math.sign(outY) * autoscrollSpeed(outY));
+
+  const cs = getComputedStyle(ta);
+  const padT = parseFloat(cs.paddingTop) || 0;
+  const lineH = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+  const val = ta.value;
+  if (!dragLineStarts) dragLineStarts = lineStartsOf(val);
+  if (!dragMeasure) dragMeasure = makeLineMeasure();
+
+  // Точка указателя, прижатая к видимой области textarea, в координатах контента.
+  const cx = Math.min(Math.max(x, rect.left), rect.left + ta.clientWidth - 1) - rect.left + ta.scrollLeft;
+  const cy = Math.min(Math.max(y, rect.top), rect.top + ta.clientHeight - 1) - rect.top + ta.scrollTop;
+
+  const lineIdx = Math.min(dragLineStarts.length - 1, Math.max(0, Math.floor((cy - padT) / lineH)));
+  const text = lineText(val, dragLineStarts, lineIdx);
+  const mx = dragRef.mirrorX + (cx - dragRef.contentX);
+  const off = dragLineStarts[lineIdx] + dragMeasure.colAt(text, mx);
+
+  if (off >= dragAnchor) ta.setSelectionRange(dragAnchor, off, "forward");
+  else ta.setSelectionRange(off, dragAnchor, "backward");
+  updatePos();
+}
+
+// Якорь берётся из нативного выделения после того, как WebKit обработал
+// mousedown (в самом mousedown selectionStart ещё старый).
+function captureDragAnchor(clientX, shiftKey) {
+  const ta = editor;
+  let anchor = ta.selectionStart;
+  if (shiftKey && ta.selectionDirection === "backward") anchor = ta.selectionEnd;
+  dragAnchor = anchor;
+  dragClick = { contentX: clientX - ta.getBoundingClientRect().left + ta.scrollLeft, shiftKey };
+}
+
+// Опорная точка считается лениво — при первом выходе указателя за край,
+// чтобы обычный клик в большом файле не платил за разбор строк.
+function computeDragRef() {
+  const ta = editor;
+  const anchor = dragAnchor;
+  const { contentX, shiftKey } = dragClick;
+  const val = ta.value;
+  dragLineStarts = lineStartsOf(val);
+  if (!dragMeasure) dragMeasure = makeLineMeasure();
+  let idx = 0, lo = 0, hi = dragLineStarts.length - 1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (dragLineStarts[mid] <= anchor) { idx = mid; lo = mid + 1; } else hi = mid - 1; }
+  const text = lineText(val, dragLineStarts, idx);
+  const mirrorX = dragMeasure.xAt(text, anchor - dragLineStarts[idx]);
+  const padL = parseFloat(getComputedStyle(ta).paddingLeft) || 0;
+  // Клик правее конца строки (или shift-клик): точка клика не совпадает с якорем —
+  // тогда калибруем только на паддинг.
+  const charW = dragMeasure.xAt("0", 1);
+  const calibrated = !shiftKey && Math.abs(contentX - padL - mirrorX) <= charW;
+  dragRef = { contentX: calibrated ? contentX : mirrorX + padL, mirrorX };
+}
 
 function dragAutoscrollStep() {
   if (!dragActive) { dragRaf = null; return; }
   const ta = editor;
   const rect = ta.getBoundingClientRect();
+  if (!wordWrap) {
+    dragAutoscrollStepNoWrap(rect);
+    dragRaf = requestAnimationFrame(dragAutoscrollStep);
+    return;
+  }
   const y = dragPointerY;
 
   let outY = 0;
@@ -549,24 +664,30 @@ async function init() {
   // Программный editor.focus() из goToMatch события mousedown не шлёт — флаг переживает.
   editor.addEventListener("mousedown", (e) => {
     findbarNavMode = false;
+    if (e.button !== 0) return;
     dragActive = true;
+    dragPointerX = e.clientX;
     dragPointerY = e.clientY;
-    // Якорь считаем САМИ из Y клика — selectionStart в этот момент ещё
-    // хранит прошлое выделение, а после WebKit его переоценивает.
-    const rect = editor.getBoundingClientRect();
-    const padT = parseFloat(getComputedStyle(editor).paddingTop) || 0;
-    const clickY = editor.scrollTop + (e.clientY - rect.top) + padT;
-    dragAnchor = offsetAtLineStartY(clickY);
+    dragAnchor = null;
+    dragRef = null;
+    dragClick = null;
+    const { clientX, shiftKey } = e;
+    setTimeout(() => { if (dragActive) captureDragAnchor(clientX, shiftKey); }, 0);
   });
   function stopDrag() {
     dragActive = false;
     dragAnchor = null;
+    dragRef = null;
+    dragClick = null;
+    dragLineStarts = null;
+    if (dragMeasure) { dragMeasure.destroy(); dragMeasure = null; }
     if (dragRaf !== null) { cancelAnimationFrame(dragRaf); dragRaf = null; }
   }
   document.addEventListener("mousemove", (e) => {
     if (!dragActive) return;
     // Кнопка отпущена, но mouseup не долетел (трекпад за границей окна) — глушим.
     if (e.buttons === 0) { stopDrag(); return; }
+    dragPointerX = e.clientX;
     dragPointerY = e.clientY;
     if (dragRaf === null) dragRaf = requestAnimationFrame(dragAutoscrollStep);
   });
