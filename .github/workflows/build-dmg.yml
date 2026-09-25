@@ -1,0 +1,38 @@
+# Builds an unsigned universal (Apple Silicon + Intel) .dmg and attaches it to the
+# workflow run as an artifact. Runs on version tags (v*) or manually.
+# It does not publish a GitHub Release.
+name: Build DMG
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - run: npm run build -- --target universal-apple-darwin --bundles dmg
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: LikeNotepad.exe-dmg
+          path: src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+          if-no-files-found: error
