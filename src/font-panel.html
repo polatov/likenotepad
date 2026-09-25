@@ -200,11 +200,11 @@ body.theme-dark {
   const invoke = window.__TAURI__.core.invoke;
   const { getCurrentWindow } = window.__TAURI__.window;
 
-  // Перевод статического текста (data-i18n) до показа окна — без мигания
+  // Translate static text (data-i18n) before the window is shown, to avoid flicker
   window.I18N.localizeDOM();
   document.title = window.I18N.t("fontTitle");
 
-  // Тема из URL-параметра
+  // Theme from the URL parameter
   const params = new URLSearchParams(window.location.search);
   const theme = params.get("theme") || "auto";
   const isDark = theme === "dark" ||
@@ -317,7 +317,7 @@ body.theme-dark {
       const reg = fam.faces.find(function(f) { return f.weight==="normal" && f.style==="normal"; }) || fam.faces[0];
       curFace = reg.name; curWeight = reg.weight; curStyle = reg.style;
     }
-    // Очищаем поле поиска и проставляем имя семьи (не считается ручным вводом)
+    // Clear the search field and fill in the family name (not treated as user input)
     userTyping = false;
     document.getElementById("font-search").value = family;
     renderFamilies();
@@ -391,25 +391,25 @@ body.theme-dark {
   });
 
   document.getElementById("face-display").addEventListener("keydown", function(e) {
-    // Запрещаем ввод цифр
+    // Disallow digits
     if (e.key >= "0" && e.key <= "9") {
       e.preventDefault();
     }
   });
 
   document.getElementById("face-display").addEventListener("input", function(e) {
-    // Ищем подходящее начертание у текущего семейства
+    // Look for a matching face in the current family
     const q = e.target.value.toLowerCase();
     const fam = fontList.find(function(f) { return f.family === curFamily; });
     if (!fam) return;
     const match = fam.faces.find(function(f) { return f.name.toLowerCase().startsWith(q); });
     if (match) {
-      // Не вызываем selectFace полностью, чтобы не сбивать ввод;
-      // обновляем только активность в списке и подгружаем превью
+      // Do not call selectFace in full, so typing is not disrupted;
+      // only update the active item in the list and load the preview
       curFace = match.name;
       curWeight = match.weight;
       curStyle = match.style;
-      // Перерисовка списка начертаний без сброса значения input
+      // Re-render the face list without resetting the input value
       const ul = document.getElementById("font-faces");
       ul.querySelectorAll("li").forEach(function(li) {
         li.classList.toggle("active", li.textContent === match.name);
@@ -456,14 +456,14 @@ body.theme-dark {
     document.getElementById("font-search").value = curFamily;
     getCurrentWindow().show();
     getCurrentWindow().setFocus();
-    // Начальный фокус на поле "Шрифт" с выделением текста
+    // Initial focus on the "Font" field with its text selected
     setTimeout(function() {
       const inp = document.getElementById("font-search");
       inp.focus();
       inp.select();
     }, 80);
   });
-  // ── Навигация стрелками ──
+  // ── Arrow-key navigation ──
   function arrowNav(inputId, listSelector, getItems, applyIndex) {
     const input = document.getElementById(inputId);
     input.addEventListener("keydown", function(e) {
@@ -480,7 +480,7 @@ body.theme-dark {
     });
   }
 
-  // Стрелки в поле "Шрифт" двигают по списку семейств
+  // Arrows in the "Font" field move through the family list
   arrowNav("font-search", "#font-families",
     function() {
       return Array.from(document.querySelectorAll("#font-families li"))
@@ -499,7 +499,7 @@ body.theme-dark {
     }
   );
 
-  // Стрелки в поле "Начертание"
+  // Arrows in the "Typeface" field
   arrowNav("face-display", "#font-faces",
     function() {
       return Array.from(document.querySelectorAll("#font-faces li"))
@@ -515,7 +515,7 @@ body.theme-dark {
     }
   );
 
-  // Стрелки в поле "Размер"
+  // Arrows in the "Size" field
   arrowNav("size-input", "#font-sizes",
     function() {
       return Array.from(document.querySelectorAll("#font-sizes li"))
@@ -530,7 +530,7 @@ body.theme-dark {
     }
   );
 
-  // ── Стрелки в самих списках ──
+  // ── Arrows inside the lists themselves ──
   function listArrowNav(listId, onSelect) {
     const ul = document.getElementById(listId);
     ul.addEventListener("keydown", function(e) {

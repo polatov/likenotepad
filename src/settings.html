@@ -178,7 +178,7 @@
     b.addEventListener("click", () => selectTheme(b.dataset.theme));
   });
 
-  // Тумблер «Использовать вкладки»
+  // "Use tabs" toggle
   const tabsToggle = document.getElementById("tabs-toggle");
   function setToggleState(on) {
     tabsToggle.classList.toggle("on", on);
@@ -195,19 +195,19 @@
     if (e.key === "Escape") { invoke("close_settings"); }
   });
 
-  // Перевод статического текста (data-i18n) до показа окна — без мигания
+  // Translate static text (data-i18n) before the window is shown, to avoid flicker
   window.I18N.localizeDOM();
   document.title = window.I18N.t("settingsTitle");
 
-  // Init: тема из URL → применить ДО show (анти-FOUC)
+  // Init: theme from the URL, applied BEFORE show (no FOUC)
   const initial = new URLSearchParams(location.search).get("theme") || "auto";
   applyWindowTheme(initial);
   setActiveSegment(initial);
 
-  // Тумблер вкладок: состояние из конфига (async, после рендера — мерцания не даёт)
+  // Tabs toggle: state from the config (async, after render; causes no flicker)
   invoke("get_use_tabs").then(setToggleState).catch((e) => console.error("get_use_tabs:", e));
 
-  // Тумблер «Счётчик слов и символов»
+  // "Word and character counter" toggle
   const counterToggle = document.getElementById("counter-toggle");
   function setCounterState(on) {
     counterToggle.classList.toggle("on", on);
@@ -221,7 +221,7 @@
   });
   invoke("get_show_counter").then(setCounterState).catch((e) => console.error("get_show_counter:", e));
 
-  // Тумблер «Заголовок из первой строки»
+  // "Title from the first line" toggle
   const autonameToggle = document.getElementById("autoname-toggle");
   function setAutonameState(on) {
     autonameToggle.classList.toggle("on", on);

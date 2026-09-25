@@ -173,9 +173,9 @@
     color: var(--status-text);
     cursor: pointer;
     font-size: 12px;
-    /* Асимметричный паддинг опускает «Aa» на полпикселя: без него базовая линия
-       заглавных на 0.5px выше, чем у ‹ › (замер в WKWebView @2x). Рамка кнопки
-       при этом остаётся на месте. */
+    /* Asymmetric padding moves "Aa" down half a pixel: without it the cap baseline
+       sits 0.5px above the ‹ › baseline (measured in WKWebView @2x). The button
+       border stays in place. */
     padding: 2.5px 6px 1.5px;
     line-height: 1;
   }
@@ -250,7 +250,7 @@
     gap: 12px;
   }
 
-  /* ── Контекстное меню редактора (кастомное, вместо системного WKWebView) ── */
+  /* ── Editor context menu (custom, replacing the WKWebView system menu) ── */
   #ctx-menu {
     position: fixed;
     min-width: 180px;

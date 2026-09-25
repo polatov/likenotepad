@@ -18,8 +18,8 @@ const findClose = document.getElementById("find-close");
 const gotobar = document.getElementById("gotobar");
 const gotoInput = document.getElementById("goto-input");
 
-// Словарь вынесен в i18n.js (общий для всех окон), подключён в index.html
-// обычным <script> ПЕРЕД этим модулем — window.I18N готов к моменту старта.
+// The dictionary lives in i18n.js (shared by all windows) and is loaded in index.html
+// as a plain <script> BEFORE this module, so window.I18N is ready at startup.
 const lang = window.I18N.lang;
 let findbarNavMode = false;
 let windowShown = false;
@@ -28,7 +28,7 @@ let isHandlingQuit = false;
 
 const t = (key, ...args) => window.I18N.t(key, ...args);
 
-// Перевод статического текста панелей (data-i18n атрибуты в index.html)
+// Translate static panel text (data-i18n attributes in index.html)
 window.I18N.localizeDOM();
 
 // --- State ---
@@ -83,7 +83,7 @@ function dateStamp() {
   });
 }
 
-// Пасхалка .LOG: если первая строка файла ровно ".LOG", дописать штамп времени
+// The .LOG easter egg: if the first line is exactly ".LOG", append a timestamp
 function applyLogStamp() {
   const firstLine = editor.value.split("\n")[0].replace(/\r$/, "");
   if (firstLine !== ".LOG") return;
@@ -291,8 +291,8 @@ function goToMatch(direction) {
     return;
   }
 
-  // Базовая точка: конец предыдущего выделения (если оно совпадает с матчем — current будет idx этого матча)
-  // Для "next" ищем строго ПОСЛЕ конца выделения, чтобы не застревать на одном и том же
+  // Reference point: the end of the previous selection (if it equals a match, current is that match's index)
+  // For "next", search strictly AFTER the selection end so we do not get stuck on the same match
   const anchorNext = editor.selectionEnd;
   const anchorPrev = editor.selectionStart;
 
@@ -309,8 +309,8 @@ function goToMatch(direction) {
   }
   const idx = matches[pos];
 
-  // Выделяем совпадение и скроллим к нему, потом возвращаем фокус в поле поиска.
-  // Скролл делаем пока фокус на editor (иначе scrollTop при setSelectionRange не сработает в WebKit для textarea без фокуса).
+  // Select the match and scroll to it, then return focus to the search field.
+  // Scroll while the editor has focus (WebKit ignores scrollTop on setSelectionRange for an unfocused textarea).
   editor.focus();
   editor.setSelectionRange(idx, idx + term.length);
   scrollEditorToSelection(idx);
@@ -318,8 +318,8 @@ function goToMatch(direction) {
   findCount.textContent = t("findPos", pos + 1, matches.length);
 }
 
-// Скроллит textarea к позиции offset через зеркальный div с тем же шрифтом/wrap.
-// Общее построение зеркального div с computed styles editor.
+// Scrolls the textarea to an offset using a mirror div with the same font/wrap.
+// Shared builder for a mirror div that copies the editor's computed styles.
 function buildEditorMirror() {
   const ta = editor;
   const cs = window.getComputedStyle(ta);
@@ -364,8 +364,8 @@ function scrollEditorToSelection(offset) {
   }
 }
 
-// Обратный маппинг Y → символьный offset (конец логической строки под этой Y).
-// targetY — в координатах контента (scrollTop уже учтён до вызова).
+// Reverse mapping Y → character offset (end of the logical line at that Y).
+// targetY is in content coordinates (scrollTop is applied by the caller).
 function offsetAtContentY(targetY) {
   const ta = editor;
   const val = ta.value;
@@ -392,17 +392,17 @@ function offsetAtContentY(targetY) {
   return bestOffset;
 }
 
-// ---- Drag-autoscroll по обеим осям: WKWebView не автоскроллит textarea
-// при протягивании выделения тачпадом за границу. Ведём scroll + selection сами. ----
+// ---- Drag-autoscroll on both axes: WKWebView does not autoscroll a textarea
+// when a selection is dragged past its edge, so we drive scroll + selection ourselves. ----
 let dragAnchor = null;
 let dragActive = false;
 let dragPointerX = 0;
 let dragPointerY = 0;
 let dragRaf = null;
-// Опорная точка клика для горизонтали (Word Wrap OFF): X клика в координатах
-// контента и X якоря в зеркале. Колонку фокуса считаем от неё, а не от начала
-// строки/документа — так внутренний отступ текста textarea (которого нет в
-// зеркале) сокращается сам.
+// Click reference point for the horizontal axis (Word Wrap OFF): the click X in content
+// coordinates and the anchor X in the mirror. The focus column is computed relative to it,
+// not to the line/document start, so the textarea's inner text inset (absent from
+// the mirror) cancels out.
 let dragRef = null;
 let dragClick = null;
 let dragLineStarts = null;
@@ -418,8 +418,8 @@ function lineStartsOf(val) {
   return starts;
 }
 
-// Зеркало одной строки для замера X границы символа (табы и широкие символы
-// учитываются самим движком, моноширинность не предполагаем).
+// One-line mirror for measuring the X of a character boundary (tabs and wide glyphs
+// are handled by the engine; we do not assume a monospace grid).
 function makeLineMeasure() {
   const cs = window.getComputedStyle(editor);
   const el = document.createElement("span");
@@ -443,7 +443,7 @@ function makeLineMeasure() {
       range.setEnd(node, col);
       return range.getBoundingClientRect().left - el.getBoundingClientRect().left;
     },
-    // Ближайшая к x граница символа в строке.
+    // The character boundary in the line closest to x.
     colAt(text, x) {
       let lo = 0, hi = text.length;
       while (lo < hi) {
@@ -466,8 +466,8 @@ function lineText(val, starts, idx) {
   return val.substring(s, e);
 }
 
-// Шаг автоскролла при Word Wrap OFF: скроллим по обеим осям и ставим фокус
-// выделения в строку/колонку под указателем (прижатым к видимой области).
+// Autoscroll step with Word Wrap OFF: scroll on both axes and put the selection focus
+// at the line/column under the pointer (clamped to the visible area).
 function dragAutoscrollStepNoWrap(rect) {
   const ta = editor;
   const x = dragPointerX, y = dragPointerY;
@@ -490,7 +490,7 @@ function dragAutoscrollStepNoWrap(rect) {
   if (!dragLineStarts) dragLineStarts = lineStartsOf(val);
   if (!dragMeasure) dragMeasure = makeLineMeasure();
 
-  // Точка указателя, прижатая к видимой области textarea, в координатах контента.
+  // The pointer clamped to the textarea's visible area, in content coordinates.
   const cx = Math.min(Math.max(x, rect.left), rect.left + ta.clientWidth - 1) - rect.left + ta.scrollLeft;
   const cy = Math.min(Math.max(y, rect.top), rect.top + ta.clientHeight - 1) - rect.top + ta.scrollTop;
 
@@ -504,8 +504,8 @@ function dragAutoscrollStepNoWrap(rect) {
   updatePos();
 }
 
-// Якорь берётся из нативного выделения после того, как WebKit обработал
-// mousedown (в самом mousedown selectionStart ещё старый).
+// The anchor comes from the native selection after WebKit has handled
+// mousedown (inside mousedown itself selectionStart is still stale).
 function captureDragAnchor(clientX, shiftKey) {
   const ta = editor;
   let anchor = ta.selectionStart;
@@ -514,8 +514,8 @@ function captureDragAnchor(clientX, shiftKey) {
   dragClick = { contentX: clientX - ta.getBoundingClientRect().left + ta.scrollLeft, shiftKey };
 }
 
-// Опорная точка считается лениво — при первом выходе указателя за край,
-// чтобы обычный клик в большом файле не платил за разбор строк.
+// The reference point is computed lazily, on the first edge crossing,
+// so a plain click in a large file does not pay for splitting lines.
 function computeDragRef() {
   const ta = editor;
   const anchor = dragAnchor;
@@ -528,8 +528,8 @@ function computeDragRef() {
   const text = lineText(val, dragLineStarts, idx);
   const mirrorX = dragMeasure.xAt(text, anchor - dragLineStarts[idx]);
   const padL = parseFloat(getComputedStyle(ta).paddingLeft) || 0;
-  // Клик правее конца строки (или shift-клик): точка клика не совпадает с якорем —
-  // тогда калибруем только на паддинг.
+  // Click past the end of the line (or shift-click): the click point is not the anchor,
+  // so calibrate on the padding only.
   const charW = dragMeasure.xAt("0", 1);
   const calibrated = !shiftKey && Math.abs(contentX - padL - mirrorX) <= charW;
   dragRef = { contentX: calibrated ? contentX : mirrorX + padL, mirrorX };
@@ -573,7 +573,7 @@ function doReplace() {
   if (!term) return;
   const matches = findAllMatches();
   if (matches.length === 0) return;
-  // найти текущее совпадение (ближайшее к selectionStart)
+  // find the current match (closest to selectionStart)
   const current = editor.selectionStart;
   let pos = matches.findIndex(m => m === current);
   if (pos === -1) pos = matches.findIndex(m => m >= current);
@@ -583,7 +583,7 @@ function doReplace() {
   editor.setSelectionRange(idx, idx + term.length);
   document.execCommand("insertText", false, replacement);
   findInput.focus();
-  // перейти к следующему совпадению
+  // go to the next match
   goToMatch(1);
 }
 
@@ -623,15 +623,15 @@ async function handleCloseRequested() {
 
     const name = displayName();
 
-    // 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
+    // 0 = Save, 1 = Don't Save, 2 = Cancel
     const choice = await invoke("confirm_close_dirty", { name, lang });
 
-    if (choice === 2) return;            // Отмена — окно остаётся открытым
-    if (choice === 0) {                  // Сохранить
+    if (choice === 2) return;            // Cancel: keep the window open
+    if (choice === 0) {                  // Save
       const saved = await saveFile();
-      if (!saved) return;                // отменили Save As — не закрываем
+      if (!saved) return;                // Save As was cancelled: do not close
     }
-    // choice === 1 (Не сохранять) проваливается сюда без сохранения
+    // choice === 1 (Don't Save) falls through without saving
     await invoke("confirm_close");
   } finally {
     isHandlingClose = false;
@@ -659,9 +659,9 @@ async function handleQuitSaveWindow() {
 // --- Init ---
 async function init() {
   editor.addEventListener("input", () => { markDirty(); updateStatus(); updatePos(); });
-  // Живой клик/печать в editor выключает режим навигации по Enter:
-  // после этого Enter в тексте = перенос строки, а не "найти далее".
-  // Программный editor.focus() из goToMatch события mousedown не шлёт — флаг переживает.
+  // A real click/keystroke in the editor turns off Enter-navigation mode:
+  // after that, Enter in the text inserts a newline instead of "find next".
+  // A programmatic editor.focus() from goToMatch sends no mousedown, so the flag survives.
   editor.addEventListener("mousedown", (e) => {
     findbarNavMode = false;
     if (e.button !== 0) return;
@@ -685,7 +685,7 @@ async function init() {
   }
   document.addEventListener("mousemove", (e) => {
     if (!dragActive) return;
-    // Кнопка отпущена, но mouseup не долетел (трекпад за границей окна) — глушим.
+    // Button released but mouseup never arrived (trackpad outside the window): stop.
     if (e.buttons === 0) { stopDrag(); return; }
     dragPointerX = e.clientX;
     dragPointerY = e.clientY;
@@ -695,32 +695,32 @@ async function init() {
   document.addEventListener("mouseleave", stopDrag);
   window.addEventListener("blur", stopDrag);
   editor.addEventListener("keydown", (e) => {
-    // Не сбрасываем режим навигации на: Enter (обрабатывает capture-листенер),
-    // хоткеи (Cmd/Ctrl/Alt) и чистые модификаторы (Shift/Ctrl/Alt/Meta сами
-    // по себе — они приходят отдельным keydown перед основной клавишей).
+    // Do not reset navigation mode on: Enter (handled by the capture listener),
+    // shortcuts (Cmd/Ctrl/Alt) and bare modifiers (Shift/Ctrl/Alt/Meta on their
+    // own arrive as a separate keydown before the main key).
     if (e.key === "Enter") return;
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.key === "Shift" || e.key === "Control" || e.key === "Alt" || e.key === "Meta") return;
     findbarNavMode = false;
   });
-  // Document-level listener в capture phase: пока findbar открыт,
-  // Enter и Shift+Enter переходят к next/prev совпадению независимо от того,
-  // где сейчас фокус (findInput, editor или кнопка в баре).
-  // Capture phase нужен чтобы перехватить Enter ДО того, как textarea вставит \n.
+  // Document-level listener in the capture phase: while the find bar is open,
+  // Enter and Shift+Enter go to the next/prev match regardless of
+  // where focus is (findInput, the editor or a bar button).
+  // The capture phase intercepts Enter BEFORE the textarea inserts \n.
   document.addEventListener("keydown", (e) => {
     const findbar = document.getElementById("findbar");
     if (findbar.hidden) return;
     if (e.key !== "Enter") return;
-    // Enter переходит к совпадению ТОЛЬКО когда фокус внутри findbar
-    // (поле поиска или замены). В editor Enter = перенос строки (как TextEdit).
-    // "Найти далее" из текста — через Cmd+G / Cmd+Shift+G (висят отдельно).
+    // Enter jumps to a match ONLY when focus is inside the find bar
+    // (search or replace field). In the editor Enter inserts a newline (like TextEdit).
+    // "Find next" from the text is Cmd+G / Cmd+Shift+G (bound separately).
     if (!findbarNavMode) return;
     e.preventDefault();
     e.stopPropagation();
     goToMatch(e.shiftKey ? -1 : 1);
   }, true);
-  // Инкрементальный счётчик (как в TextEdit): пересчитываем при каждом изменении запроса.
-  // Перехода не делаем — для перехода нужен Enter/Cmd+G/кнопки.
+  // Incremental counter (like TextEdit): recount on every query change.
+  // No jump here: jumping takes Enter/Cmd+G/the buttons.
   findInput.addEventListener("input", () => {
     if (!findInput.value) {
       findCount.textContent = "";
@@ -752,10 +752,10 @@ async function init() {
   document.addEventListener("selectionchange", () => {
     if (document.activeElement !== editor) return;
     updatePos();
-    // Форс-репейнт: WebKit оставляет непрокрашенный шов на границах внутренних
-    // тайлов отрисовки текста в textarea при выделении (не лечится translateZ/
-    // will-change). Микро-сдвиг scrollTop туда-обратно форсирует WebKit
-    // перерисовать видимую область целиком.
+    // Forced repaint: WebKit leaves an unpainted seam at the boundaries of its internal
+    // text tiles in a textarea during selection (translateZ/will-change do not help).
+    // Nudging scrollTop forth and back forces WebKit to repaint
+    // the whole visible area. See technical-lessons.md.
     const st = editor.scrollTop;
     editor.scrollTop = st + 1;
     editor.scrollTop = st;
@@ -907,7 +907,7 @@ async function init() {
         case "datetime": {
           const stamp = dateStamp();
           editor.focus();
-          // разорвать undo-серию, чтобы дата стала отдельной записью отмены
+          // break the undo group so the timestamp is a separate undo step
           const p = editor.selectionStart;
           editor.setSelectionRange(p, p);
           document.execCommand("insertText", false, stamp);
@@ -923,7 +923,7 @@ async function init() {
               editor.focus();
               const ok = document.execCommand("insertText", false, text);
               if (!ok) {
-                console.error("insertText не сработал");
+                console.error("insertText failed");
               }
               markDirty();
               updateStatus();
@@ -959,7 +959,7 @@ async function openFontPanel() {
   await invoke("open_font_panel");
 }
 
-// --- Контекстное меню редактора (кастомное, вместо системного WKWebView) ---
+// --- Editor context menu (custom, replacing the WKWebView system menu) ---
 function showCtxMenu(x, y) {
   ctxMenu.hidden = false;
   const rect = ctxMenu.getBoundingClientRect();

@@ -1,24 +1,24 @@
-// i18n.js — единый словарь локализации для всех окон LikeNotepad.exe.
-// Подключается <script src="i18n.js"> в index.html, settings.html, font-panel.html.
-// Язык определяется по navigator.language (как раньше в app.js).
-// Даёт: window.I18N.lang, window.I18N.locale, window.I18N.t(key, ...args),
+// i18n.js — the single localization dictionary for all LikeNotepad.exe windows.
+// Loaded via <script src="i18n.js"> in index.html, settings.html, font-panel.html.
+// The language is detected from navigator.language.
+// Exposes: window.I18N.lang, window.I18N.locale, window.I18N.t(key, ...args),
 //       window.I18N.localizeDOM(root).
 (function () {
   "use strict";
 
-  // ── Правила множественного числа по семействам языков ──
-  // f — массив форм. Возвращает нужную форму для числа n.
+  // ── Plural rules by language family ──
+  // f is an array of forms; returns the form for the number n.
   function pTwo(n, f) { return n === 1 ? f[0] : f[1]; }              // en, es, de, pt
-  function pFr(n, f) { return (n === 0 || n === 1) ? f[0] : f[1]; }  // fr: 0 и 1 = ед.ч.
-  function pRu(n, f) {                                                // ru: славянская тройка
+  function pFr(n, f) { return (n === 0 || n === 1) ? f[0] : f[1]; }  // fr: 0 and 1 are singular
+  function pRu(n, f) {                                                // ru: Slavic three-form rule
     const a = n % 10, b = n % 100;
     if (a === 1 && b !== 11) return f[0];
     if (a >= 2 && a <= 4 && (b < 12 || b > 14)) return f[1];
     return f[2];
   }
-  function pOne(n, f) { return f[0]; }                                // zh, ja: форм нет
+  function pOne(n, f) { return f[0]; }                                // zh, ja: no plural forms
 
-  // ── Словари. Каждый ключ — либо строка, либо функция(args) → строка ──
+  // ── Dictionaries. Each key is a string or a function(args) → string ──
   const L = {
     en: {
       locale: "en-US",
@@ -453,7 +453,7 @@
     },
   };
 
-  // ── Определение языка из системы; fallback en ──
+  // ── Detect the system language; fall back to en ──
   function detectLang() {
     const raw = (navigator.language || "en").toLowerCase();
     const codes = ["ru", "es", "de", "fr", "zh", "ja", "pt"];
@@ -464,14 +464,14 @@
   const lang = detectLang();
   const dict = L[lang] || L.en;
 
-  // t(key, ...args): строка → как есть; функция → вызывается с args.
+  // t(key, ...args): a string is returned as is; a function is called with args.
   function t(key, ...args) {
     const v = dict[key] !== undefined ? dict[key] : L.en[key];
     if (v === undefined) return key;
     return typeof v === "function" ? v(...args) : v;
   }
 
-  // localizeDOM(root): проставляет переводы по data-атрибутам.
+  // localizeDOM(root): applies translations from data-* attributes.
   //   data-i18n="key" → textContent | data-i18n-ph="key" → placeholder
   //   data-i18n-title="key" → title
   function localizeDOM(root) {

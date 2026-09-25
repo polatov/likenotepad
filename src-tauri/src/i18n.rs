@@ -1,15 +1,15 @@
-// i18n.rs — локализация НАТИВНОЙ части (меню NSMenu и алерты NSAlert).
-// Зеркало src/i18n.js, но для Rust: те же 8 языков, тот же принцип фолбэка.
+// i18n.rs — localization of the NATIVE side (NSMenu menus and NSAlert alerts).
+// Mirrors src/i18n.js for Rust: the same 8 languages and fallback rules.
 //
-// Схема фолбэка (три ступени, как в JS):
-//   1. неизвестная системная локаль        -> "en"
-//   2. язык есть, но ключа в нём нет       -> английский вариант ключа
-//   3. ключа нет и в английском            -> сам ключ (чтобы не было пустоты)
+// Fallback chain (three steps, as in JS):
+//   1. unknown system locale              -> "en"
+//   2. language known, key missing in it  -> the English value
+//   3. key missing in English too         -> the key itself (never empty)
 //
-// Добавление языка = новая функция-таблица + строка в match внутри mt().
+// Adding a language = a new table function + a line in the match inside mt().
 
-/// Определение языка системы. Возвращает один из 8 кодов, иначе "en".
-/// Префиксы те же, что в src/i18n.js — источники должны совпадать.
+/// Detects the system language. Returns one of the 8 codes, otherwise "en".
+/// Uses the same prefixes as src/i18n.js; the two must stay in sync.
 pub fn system_lang() -> &'static str {
     let locale = sys_locale::get_locale().unwrap_or_default().to_lowercase();
     if locale.starts_with("ru") {
@@ -31,7 +31,7 @@ pub fn system_lang() -> &'static str {
     }
 }
 
-/// Menu Translate: строка меню по ключу для указанного языка.
+/// Menu Translate: the menu string for a key in the given language.
 pub fn mt(lang: &str, key: &'static str) -> &'static str {
     match lang {
         "ru" => ru(key),
@@ -45,15 +45,15 @@ pub fn mt(lang: &str, key: &'static str) -> &'static str {
     }
 }
 
-// ─────────────────────────── English (база) ───────────────────────────
+// ─────────────────────────── English (base) ───────────────────────────
 fn en(key: &'static str) -> &'static str {
     match key {
-        // Меню приложения
+        // App menu
         "about" => "About LikeNotepad.exe",
         "about_comments" => "The same Notepad, but without Windows. No clouds, no subscriptions, no AI. Just text",
         "settings" => "Settings\u{2026}",
         "quit" => "Quit LikeNotepad.exe",
-        // Файл
+        // File
         "file" => "File",
         "new" => "New",
         "new_window" => "New Window",
@@ -66,7 +66,7 @@ fn en(key: &'static str) -> &'static str {
         "page_setup" => "Page Setup...",
         "print" => "Print...",
         "close" => "Close",
-        // Правка
+        // Edit
         "edit" => "Edit",
         "undo" => "Undo",
         "redo" => "Redo",
@@ -79,29 +79,29 @@ fn en(key: &'static str) -> &'static str {
         "replace" => "Replace...",
         "goto" => "Go to...",
         "datetime" => "Time/Date",
-        // Вид
+        // View
         "view" => "View",
         "status_bar" => "Status Bar",
-        // Формат
+        // Format
         "format" => "Format",
         "word_wrap" => "Word Wrap",
         "font" => "Font\u{2026}",
         "font_title" => "Font",
         "settings_title" => "Settings",
-        // Справка
+        // Help
         "help" => "Help",
-        // Кнопки алертов
+        // Alert buttons
         "alert_save" => "Save\u{2026}",
         "alert_dont_save" => "Don't Save",
         "alert_cancel" => "Cancel",
-        // Пояснения алертов
+        // Alert informative text
         "quit_info" => "Do you want to save your changes before quitting? Your changes will be lost if you don't save.",
         "close_info" => "Your changes will be lost if you don't save them.",
         _ => key,
     }
 }
 
-// ─────────────────────────── Русский ───────────────────────────
+// ─────────────────────────── Russian ───────────────────────────
 fn ru(key: &'static str) -> &'static str {
     match key {
         "about" => "О программе LikeNotepad.exe",
@@ -437,9 +437,9 @@ fn pt(key: &'static str) -> &'static str {
     }
 }
 
-// ─────────── Заголовок алерта выхода (Cmd+Q), с числом документов ───────────
-// Плюрализация внутри: русская тройка, двойка для en/es/de/fr/pt,
-// китайский и японский без форм.
+// ─────────── Quit alert title (Cmd+Q), with the document count ───────────
+// Pluralization inside: three Russian forms, two for en/es/de/fr/pt,
+// none for Chinese and Japanese.
 pub fn quit_alert_msg(lang: &str, count: usize) -> String {
     match lang {
         "ru" => {
@@ -503,7 +503,7 @@ pub fn quit_alert_msg(lang: &str, count: usize) -> String {
     }
 }
 
-// ─────────── Заголовок алерта закрытия окна (Cmd+W), с именем файла ───────────
+// ─────────── Window close alert title (Cmd+W), with the file name ───────────
 pub fn close_alert_msg(lang: &str, name: &str) -> String {
     match lang {
         "ru" => format!("Сохранить изменения в «{}»?", name),

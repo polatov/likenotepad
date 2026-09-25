@@ -56,8 +56,8 @@ fn emit_to_focused<R: tauri::Runtime>(app: &tauri::AppHandle<R>, event: &str, pa
     }
 }
 
-// Показывает трёхкнопочный NSAlert. ДОЛЖЕН вызываться на главном потоке.
-// Возврат: 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
+// Shows a three-button NSAlert. MUST be called on the main thread.
+// Returns: 0 = Save, 1 = Don't Save, 2 = Cancel
 fn show_quit_alert(count: usize, lang: &str) -> isize {
     autoreleasepool(|_| {
         let msg = i18n::quit_alert_msg(lang, count);
@@ -75,14 +75,14 @@ fn show_quit_alert(count: usize, lang: &str) -> isize {
         let cancel_btn = alert.addButtonWithTitle(&NSString::from_str(b_cancel));
         cancel_btn.setKeyEquivalent(&NSString::from_str("\u{1b}"));
         let response = alert.runModal();
-        // NSAlertFirstButtonReturn = 1000, второй = 1001, третий = 1002
+        // NSAlertFirstButtonReturn = 1000, second = 1001, third = 1002
         response - 1000
     })
 }
 
-// Показывает трёхкнопочный NSAlert для закрытия ОДНОГО окна (стиль TextEdit).
-// ДОЛЖЕН вызываться на главном потоке.
-// Возврат: 0 = Сохранить, 1 = Не сохранять, 2 = Отмена
+// Shows a three-button NSAlert for closing ONE window (TextEdit style).
+// MUST be called on the main thread.
+// Returns: 0 = Save, 1 = Don't Save, 2 = Cancel
 fn show_close_alert(name: &str, lang: &str) -> isize {
     autoreleasepool(|_| {
         let msg = i18n::close_alert_msg(lang, name);
@@ -152,24 +152,24 @@ fn cascade_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
             let mut guard = state.0.lock().unwrap();
 
             let start = match *guard {
-                // продолжаем каскад с сохранённой точки
+                // continue the cascade from the saved point
                 Some((x, y)) => NSPoint::new(x, y),
-                // первая точка стопки: top-left главного окна в Cocoa-координатах
+                // first point of the stack: the main window's top-left in Cocoa coordinates
                 None => {
                     let base_frame = if let Some(main) = app.get_webview_window("main") {
                         main.ns_window().ok().map(|mptr| (*(mptr as *const NSWindow)).frame())
                     } else {
                         None
                     };
-                    // Если main недоступен (холодный старт из Finder: main ещё
-                    // не создан) — базой служит фрейм САМОГО нового окна: оно
-                    // стоит на той же дефолтной позиции, где встанет будущий
-                    // main. NSPoint(0,0) нельзя: cascadeTopLeftFromPoint с
-                    // нулевой точкой не двигает окно вообще.
+                    // If main is unavailable (cold start from Finder: main is not
+                    // created yet), use the NEW window's own frame as the base: it
+                    // sits at the same default position where the future main
+                    // will appear. NSPoint(0,0) does not work: cascadeTopLeftFromPoint
+                    // with a zero point does not move the window at all.
                     let f = base_frame.unwrap_or_else(|| ns_window.frame());
                     // frame.origin = bottom-left; top-left.y = origin.y + height.
-                    // Смещаем на один шаг каскада (+25,-25 в Cocoa: вправо и вниз
-                    // экранно), иначе первое окно ляжет ровно поверх базового.
+                    // Offset by one cascade step (+25,-25 in Cocoa: right and down
+                    // on screen), otherwise the first window lands exactly on top of the base one.
                     NSPoint::new(f.origin.x + 25.0, f.origin.y + f.size.height - 25.0)
                 }
             };
@@ -183,7 +183,7 @@ fn cascade_window(app: &tauri::AppHandle, window: &tauri::WebviewWindow) {
 fn new_window(app: &tauri::AppHandle) {
     let use_tabs = crate::config::load(app).use_tabs;
 
-    // Хост-окно ищем ДО build — после создания нового окна фокус перескочит.
+    // Find the host window BEFORE build: focus moves once the new window is created.
     let host = if use_tabs {
         app.webview_windows()
             .into_iter()
@@ -213,7 +213,7 @@ fn new_window(app: &tauri::AppHandle) {
                         set_tabbing_preferred(&h);
                         attach_as_tab(&h, &win);
                     }
-                    // нет фокусного окна (первое окно) — standalone, станет хостом
+                    // no focused window (first window): standalone, it becomes the host
                     None => {}
                 }
             } else {
@@ -239,8 +239,8 @@ fn new_standalone_window(app: &tauri::AppHandle) {
         .build()
     {
         Ok(win) => {
-            // Preferred (а не Disallowed): окно сможет принимать вкладки как
-            // хост своей группы. В одиночестве таб-бар не показывается.
+            // Preferred (not Disallowed): the window can accept tabs as
+            // the host of its group. On its own the tab bar is hidden.
             set_tabbing_preferred(&win);
             cascade_window(app, &win);
         }
@@ -307,9 +307,9 @@ fn handle_opened_urls(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
 
         if first {
             first = false;
-            // Только холодный старт (main физически ещё не существует) грузит
-            // файл прямо в main. Если main уже открыт (даже пустой) — всегда
-            // новое окно, как TextEdit. Пустое main не трогаем осознанно.
+            // Only a cold start (main does not exist yet) loads
+            // the file straight into main. If main is already open (even empty), always
+            // a new window, like TextEdit. An empty main is left alone on purpose.
             if app.webview_windows().is_empty() {
                 app.state::<PendingFileState>()
                     .0
@@ -323,7 +323,7 @@ fn handle_opened_urls(app: &tauri::AppHandle, urls: Vec<tauri::Url>) {
     }
 }
 
-// Детект языка живёт в i18n.rs — там же, где таблицы переводов.
+// Language detection lives in i18n.rs, next to the translation tables.
 use i18n::system_lang;
 
 #[tauri::command]
@@ -448,7 +448,7 @@ async fn apply_font_and_close(
     weight: String,
     style: String,
 ) -> Result<(), String> {
-    // 1) Сохраняем в конфиг и эмитим font-changed
+    // 1) Save to the config and emit font-changed
     {
         let mut cfg = config::load(&app);
         cfg.font_name = name.clone();
@@ -460,10 +460,10 @@ async fn apply_font_and_close(
             .map_err(|e| e.to_string())?;
     }
 
-    // 2) Закрываем окно отдельной задачей, чтобы не падать в текущей invoke
+    // 2) Close the window in a separate task so the current invoke does not crash
     let app_clone = app.clone();
     tauri::async_runtime::spawn(async move {
-        // Небольшая задержка, чтобы текущий invoke и эмит точно завершились
+        // A short delay so the current invoke and emit are sure to finish
         tokio::time::sleep(std::time::Duration::from_millis(50)).await;
         if let Some(win) = app_clone.get_webview_window("font-panel") {
             let _ = win.close();
@@ -746,11 +746,11 @@ fn claim_untitled_number(window: tauri::Window) -> u32 {
     let state = window.state::<UntitledState>();
     let mut guard = state.0.lock().unwrap();
     let label = window.label().to_string();
-    // если у окна уже есть номер — вернуть его (идемпотентность)
+    // if the window already has a number, return it (idempotent)
     if let Some(n) = guard.get(&label) {
         return *n;
     }
-    // найти наименьший свободный номер начиная с 1
+    // find the smallest free number starting from 1
     let used: std::collections::HashSet<u32> = guard.values().copied().collect();
     let mut n = 1;
     while used.contains(&n) {
@@ -978,7 +978,7 @@ struct StatusMenuState {
 }
 
 fn add_recent(app: &tauri::AppHandle, path: &str) {
-    // обновить state: убрать дубликат, вставить в начало, обрезать до 10
+    // update state: drop the duplicate, insert at the front, cap at 10
     {
         let state = app.state::<RecentFilesState>();
         let mut guard = state.0.lock().unwrap();
@@ -986,16 +986,16 @@ fn add_recent(app: &tauri::AppHandle, path: &str) {
         guard.insert(0, path.to_string());
         guard.truncate(10);
     }
-    // обновить last_dir = папка файла
+    // update last_dir to the file's folder
     let last_dir = std::path::Path::new(path)
         .parent()
         .map(|p| p.to_string_lossy().to_string());
-    // записать в конфиг (recent + last_dir)
+    // write to the config (recent + last_dir)
     let mut cfg = config::load(app);
     cfg.recent_files = app.state::<RecentFilesState>().0.lock().unwrap().clone();
     if last_dir.is_some() { cfg.last_dir = last_dir; }
     let _ = config::save(app, &cfg);
-    // перестроить меню
+    // rebuild the menu
     rebuild_recent_menu(app);
 }
 
@@ -1008,7 +1008,7 @@ fn rebuild_recent_menu(app: &tauri::AppHandle) {
     let menu_state = app.state::<RecentMenuState>();
     let guard = menu_state.0.lock().unwrap();
     let submenu = match guard.as_ref() { Some(s) => s, None => return };
-    // очистить
+    // clear
     while let Ok(Some(_)) = submenu.remove_at(0) {}
     let lang = system_lang();
     if recent.is_empty() {
@@ -1016,7 +1016,7 @@ fn rebuild_recent_menu(app: &tauri::AppHandle) {
         let _ = submenu.append(&empty);
         return;
     }
-    // пункты recent-0..N с именем файла
+    // items recent-0..N with the file name
     for (i, path) in recent.iter().enumerate() {
         let name = std::path::Path::new(path).file_name().map(|n| n.to_string_lossy().to_string()).unwrap_or_else(|| path.clone());
         let item = MenuItem::with_id(app, format!("recent-{}", i), name, true, None::<&str>).unwrap();
@@ -1208,7 +1208,7 @@ pub fn run() {
                             let choice = show_quit_alert(count, lang);
                             match choice {
                                 0 => {
-                                    // Сохранить — обойти грязные окна по очереди
+                                    // Save: go through the dirty windows one by one
                                     let rest: Vec<String> = dirty_labels[1..].iter().cloned().rev().collect();
                                     {
                                         let state = app_clone.state::<QuitState>();
@@ -1221,7 +1221,7 @@ pub fn run() {
                                     }
                                 }
                                 1 => { app_clone.exit(0); }
-                                _ => { /* Отмена — ничего */ }
+                                _ => { /* Cancel: nothing */ }
                             }
                         });
                     }
@@ -1260,12 +1260,12 @@ pub fn run() {
                                     match read_file_content(&path) {
                                         Ok(content) => {
                                             emit_to_focused(app, "menu-open-recent", (path.clone(), content));
-                                            add_recent(app, &path); // поднять наверх списка
+                                            add_recent(app, &path); // move to the top of the list
                                         }
                                         Err(_) => {}
                                     }
                                 } else {
-                                    // файл удалён — убрать из списка и перестроить меню
+                                    // file was deleted: remove it from the list and rebuild the menu
                                     {
                                         let state = app.state::<RecentFilesState>();
                                         let mut guard = state.0.lock().unwrap();
