@@ -161,7 +161,7 @@ async function saveFileAs() {
     const auto = autoNameRaw();
     suggestedName = (auto ? auto.replace(/[\/\\]/g, "-") : displayName()) + ".txt";
   }
-  const result = await invoke("save_file_as", { content: editor.value, suggestedName });
+  const result = await invoke("save_file_as", { content: editor.value, suggestedName, sourcePath: currentPath });
   if (!result) return false;
   currentPath = result;
   await releaseUntitled();

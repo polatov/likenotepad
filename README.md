@@ -15,7 +15,7 @@ printing via AppKit) around a single `<textarea>` in WKWebView.
 - Word Wrap, font picker, light/dark/auto theme, status bar with line/column and counters
 - Drag-to-select autoscroll on both axes
 - Page Setup and Print
-- Opens files that are not valid UTF-8 as Windows-1251
+- Saves each file back in the encoding (UTF-8, UTF-16, Windows-1251) and with the line endings (LF, CRLF, CR) it was opened with, like Notepad
 - Registers as an editor for `txt`, `log`, `md`, `csv`, `json`, `xml`, `ini`, `conf`, `cfg`, `yaml`
 - On first launch, asks macOS once to make it the default app for `.txt` (the system shows its own confirmation)
 - UI in 8 languages: English, Russian, Spanish, German, French, Portuguese (Brazil),

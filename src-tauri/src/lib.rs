@@ -1,5 +1,6 @@
 mod config;
 mod i18n;
+mod textfile;
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use tauri::{
@@ -453,17 +454,12 @@ async fn open_file_new_window(app: AppHandle) -> Result<(), String> {
 }
 
 fn read_file_content(path: &str) -> Result<String, String> {
-    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
-    let content = String::from_utf8(bytes).unwrap_or_else(|e| {
-        let (decoded, _, _) = encoding_rs::WINDOWS_1251.decode(e.as_bytes());
-        decoded.into_owned()
-    });
-    Ok(content)
+    textfile::read(path)
 }
 
 #[tauri::command]
 async fn save_file(path: String, content: String) -> Result<(), String> {
-    std::fs::write(&path, &content).map_err(|e| e.to_string())
+    textfile::write(&path, &content, textfile::format_of(&path))
 }
 
 #[tauri::command]
@@ -912,7 +908,8 @@ fn cancel_quit(app: AppHandle) {
 }
 
 #[tauri::command]
-async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -> Result<Option<String>, String> {
+// Save As keeps the format of the file the text came from (`source_path`), like Notepad.
+async fn save_file_as(app: AppHandle, content: String, suggested_name: String, source_path: Option<String>) -> Result<Option<String>, String> {
     let last_dir = config::load(&app).last_dir;
     let (tx, rx) = tokio::sync::oneshot::channel();
     let mut builder = app.dialog()
@@ -928,7 +925,8 @@ async fn save_file_as(app: AppHandle, content: String, suggested_name: String) -
     match path {
         Some(FilePath::Path(p)) => {
             let path_str = p.to_string_lossy().to_string();
-            std::fs::write(&p, &content).map_err(|e| e.to_string())?;
+            let format = source_path.as_deref().map(textfile::format_of).unwrap_or_default();
+            textfile::write(&path_str, &content, format)?;
             add_recent(&app, &path_str);
             Ok(Some(path_str))
         }
