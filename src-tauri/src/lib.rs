@@ -1470,6 +1470,15 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
+            // A file dropped on an editor window opens like one opened from Finder: in a
+            // new window, one per file (folders and unreadable files are skipped).
+            if let tauri::WindowEvent::DragDrop(tauri::DragDropEvent::Drop { paths, .. }) = event {
+                if window.label() != "font-panel" && window.label() != "settings" {
+                    let urls = paths.iter().filter_map(|p| tauri::Url::from_file_path(p).ok()).collect();
+                    handle_opened_urls(window.app_handle(), urls);
+                }
+                return;
+            }
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "font-panel" || window.label() == "settings" {
                     return;

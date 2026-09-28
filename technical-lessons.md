@@ -90,3 +90,15 @@ Menlo 19/30 и 13/21, горизонтальная прокрутка, выде�
 Якорь — нативная каретка сразу после mousedown (`setTimeout 0`), а не расчёт по Y:
 в самом mousedown `selectionStart` ещё старый. Проверено настоящим drag через
 CGEvent: вправо/влево/диагональ/вертикаль, табы, клик правее конца короткой строки.
+
+## Drag-and-drop of files onto a window (Tauri `WindowEvent::DragDrop`)
+
+Works (dropped files open like files from Finder, in new windows). Automating it is not
+reliable, so there is no UI test:
+- Synthetic CGEvent drags do not start a drag in Finder at all (no events reach the app).
+- A helper AppKit app that calls `beginDraggingSession` on mouse down delivered a real
+  drop once (`Enter`/`Over`/`Drop` with the file path, new window opened), but in about ten
+  further runs macOS refused the session (`error in CoreDragDispose: -1850`) regardless of
+  activation order or `acceptsFirstMouse`.
+- Checked by hand-driven runs instead; to see the events, log
+  `WindowEvent::DragDrop` in `on_window_event` of a debug build.
