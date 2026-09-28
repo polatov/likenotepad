@@ -44,6 +44,18 @@ open, it has unsaved text — stop and ask), move the old
 `/Applications/LikeNotepad.exe.app` to `~/.Trash` (never delete permanently), `ditto` the
 new bundle in, `lsregister -f` it, launch it.
 
+## GitHub
+
+- Private repo https://github.com/polatov/likenotepad (branch `master`); `gh` 2.101 lives in
+  `~/.local/bin`, logged in as `polatov`.
+- Use `/usr/bin/git` for anything that talks to GitHub: the first `git` in PATH
+  (`/usr/local/bin`, Intel Homebrew) cannot run on this Mac, and `gh` subcommands that shell
+  out to `git` fail for the same reason. Credentials come from `gh` via the repo-local
+  `credential.https://github.com.helper`; pushes need the repo-local
+  `http.version=HTTP/1.1` (HTTP/2 pushes of a few MB fail with HTTP 400).
+- Commits use the noreply address `1778456+polatov@users.noreply.github.com` (repo-local
+  `user.email`); never commit with the personal address.
+
 ## Rules
 
 - Conventional commits, one per feature, after self-verification; commit without asking.
@@ -61,7 +73,6 @@ new bundle in, `lsregister -f` it, launch it.
   UI tests, new app icon (source: Claude Design canvas "LikeNotepad.exe Icon"), proxy icon,
   one-time `.txt` default-app offer, About panel link to https://polatov.me/notepad/,
   title bar follows the theme.
-- Open: GitHub publication (the `.dmg` workflow in `.github/workflows` has never run),
-  version 1.0.0, parity check against Windows Notepad. Apple Developer ID signing is out
+- Open: the `.dmg` workflow's first run, version 1.0.0, parity check against Windows Notepad. Apple Developer ID signing is out
   of scope for now.
 - Project page for the blog: `docs/project-page/` (handled in a separate chat).
