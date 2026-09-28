@@ -1117,7 +1117,6 @@ pub fn run() {
                 disable_tabbing(&main);
             }
             let mut cfg = config::load(handle);
-            let saved_theme = cfg.theme.clone();
             let saved_wrap = cfg.word_wrap;
             let saved_status = cfg.status_bar;
             cfg.recent_files.retain(|p| std::path::Path::new(p).exists());
