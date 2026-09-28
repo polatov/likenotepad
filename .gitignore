@@ -1,14 +1,14 @@
-# Зависимости
+# Dependencies
 node_modules/
 
-# Сборочные артефакты Rust/Tauri
+# Rust/Tauri build output
 src-tauri/target/
 src-tauri/gen/
 
-# Системный мусор macOS
+# macOS system files
 .DS_Store
 
-# Логи
+# Logs
 *.log
 .claude/
 

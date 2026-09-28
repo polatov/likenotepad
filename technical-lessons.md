@@ -1,95 +1,83 @@
 # Technical lessons
 
-## Белая полоса в выделении textarea (WKWebView)
+## White seams in the textarea selection highlight (WKWebView)
 
-Статус: исправлено своей отрисовкой подсветки (см. «Решение» ниже); 9780197 не помогал.
+Status: fixed by painting the highlight ourselves (see "Solution" below). Rounding
+`line-height` to whole pixels (9780197) did not fix it.
 
-Что установлено (сентябрь 2026, замеры в живом приложении через снимки окна):
+### What was established (September 2026, measured in the live app from window screenshots)
 
-- Исходный дефект (Word Wrap ON, `line-height: 1.6` = дробные 30.4px при 19px):
-  белая полоса под частью строки на 5 из 8 кадров. После 9780197 (`line-height`
-  в целых px) — 0 из 8. Сдвиг `scrollTop` туда-обратно на `selectionchange` для
-  этого сценария не нужен: без него тоже 0 из 8.
-- Остаточный случай, воспроизводится стабильно: Word Wrap OFF, 120 строк по 400
-  символов, Menlo 19px / `line-height: 30px`, выделено всё, прокрутка в самый низ.
-  Полоса 6pt во всю ширину между двумя последними строками. Есть и в HEAD до
-  горизонтального автоскролла — не регрессия.
-- Шов привязан к контенту, не к экрану: в координатах контента швы кончаются ровно
-  на границах, кратных 512 (2560, 3072, 3584) — это границы тайлов WebKit. Высота
-  шва растёт от тайла к тайлу: 2 → 4 → 6pt. Бывают и частичные швы (полоса только
-  под левой частью строки) — это и есть исходный симптом.
-- Не помогает: выделение после прокрутки вместо до; микросдвиг `scrollTop` после
-  прокрутки (текущий костыль). Значит, это не устаревшая инвалидация, а геометрия
-  отрисовки тайлов.
-- Округление `line-height` до целых px — не общее лекарство: при 32px, 28px и
-  `normal` шва в стабильном сценарии нет, при 30px есть. Перебор по всему документу
-  шумный (швы ловятся в первых кадрах, вероятно до того, как тайлы дорисованы),
-  устойчивой закономерности «какие значения безопасны» не найдено.
-
-Как воспроизводить без ручного теста (инструменты не в репозитории):
-временный хук в конце `src/app.js` заполняет editor, выделяет всё, выключает wrap,
-пишет состояние в заголовок окна (`getCurrentWindow().setTitle`); приложение
-собирается `cargo build` (фронтенд вшивается при сборке — после сборки `app.js`
-можно сразу вернуть); окно снимается `screencapture -l <windowID>` (только окно,
-без чужих окон; окно должно быть видимым — перекрытое WebKit не рисует);
-шов ищется по рядам пикселей «не синих» между синими, кусками ширины по 120px
-(по одной колонке нельзя — белые глифы дают ложные срабатывания).
-
-Повторная проверка (28.09.2026), синхронизированный стенд: весь документ прокручивается
-шагами по 400px, кадр снимается после отрисовки, швы ищутся по всей ширине кусками:
-- Швы есть почти при любых `line-height`: Menlo 19px — 28/29/30/34px дают 1–3 шва на
-  документ, 31/32/33px — 0 в этом прогоне; Menlo 13px (дефолт) — 20/21/22/24px дают 2–4.
-  Округление `line-height` (9780197) дефект НЕ устраняет, закономерности по значениям нет.
-- С Word Wrap ON швы тоже есть (1–2 на прогон) — первый вывод «с переносом исправлено»
-  был сделан на коротком документе и неверен.
-- Не помогает ничего из: `will-change: transform`, `transform: translateZ(0)`,
+- Original symptom (Word Wrap on, `line-height: 1.6` = a fractional 30.4px at 19px): a
+  white band under part of a line in 5 of 8 frames; after 9780197 (`line-height` in whole
+  px) 0 of 8 in that scenario, with or without the `scrollTop` nudge on `selectionchange`.
+- A case that reproduced every time: Word Wrap off, 120 lines of 400 characters, Menlo
+  19px / `line-height: 30px`, everything selected, scrolled to the bottom — a 6pt band
+  across the full width between the last two lines. Present before horizontal autoscroll
+  too, so not a regression.
+- The seams are tied to the content, not the screen: in content coordinates they end
+  exactly on multiples of 512 (2560, 3072, 3584) — WebKit's tile boundaries — and grow
+  from tile to tile (2 → 4 → 6pt). Partial seams (a band under only the left part of a
+  line) are the original symptom.
+- No effect: selecting after scrolling instead of before; nudging `scrollTop` after
+  scrolling. So it is tile painting geometry, not stale invalidation.
+- A full-document sweep (400px steps, each frame captured after painting, seams searched
+  in 120px-wide slices): seams at almost any `line-height` — Menlo 19px at 28/29/30/34px
+  gave 1–3 per document (31/32/33px gave 0 in that run), Menlo 13px (the default) at
+  20/21/22/24px gave 2–4 — and with Word Wrap on as well (the first "wrap is fixed"
+  conclusion came from a short document and was wrong).
+- None of these help: `will-change: transform`, `transform: translateZ(0)`,
   `overflow-y: scroll`, `contain: paint`, `text-rendering: geometricPrecision`,
-  `font-kerning: none`, атрибут `wrap="off"` вместо `white-space: pre`, `padding-top: 0`.
-- Вывод: это дефект отрисовки нативного выделения textarea в WKWebView на стыках
-  тайлов; CSS-настройками textarea он не лечится.
+  `font-kerning: none`, the `wrap="off"` attribute instead of `white-space: pre`,
+  `padding-top: 0`.
+- Conclusion: a WKWebView defect in painting a textarea's native selection at tile
+  boundaries; no CSS on the textarea fixes it.
 
-Кандидат на настоящее исправление: рисовать подсветку выделения самим — `::selection`
-с прозрачным фоном, а под прозрачным textarea слой с прямоугольниками выделения только
-для видимых строк (геометрия через зеркало строки, как в drag-autoscroll).
+### Solution (2026-09-28)
 
-Следующие идеи (не проверены): высота строки, делящая 512 (16/32px), но это
-меняет вид; отключить тайлинг слоя textarea; рисовать выделение не нативно.
+The native highlight is transparent (`#editor::selection { background: transparent }`,
+selected text stays white); `#sel-layer` under the transparent textarea holds rectangles
+drawn by `paintSelection()` in `src/app.js`. Geometry comes from a hidden mirror with the
+same text and styles (tabs, wide glyphs and wrapping are measured by the engine). WebKit's
+own rules, reproduced:
+- a row the selection continues past (a newline or a soft wrap) is filled to the right
+  edge of the text (`clientWidth - padding-right`, in content coordinates; with Word Wrap
+  off further if the line is longer);
+- rows stack without gaps, shifted up by half the leading; only the document's first row
+  starts at the glyph top;
+- edges on device pixels; the selection's own start and end one device pixel inside the
+  glyphs; the layer colour `#5990fe` shows on screen as the native `#4d90fe` does (WebKit
+  shifts the native one slightly);
+- no highlight while the editor is unfocused (as natively); it stays blue in an
+  inactive window.
 
-### Решение (28.09.2026)
+Verified: pixel-for-pixel against the native highlight — 0 differing rows (Word Wrap
+off/on, Menlo 19/30 and 13/21, horizontal scroll, selections starting on the first line
+and mid-document); 0 seams in the sweep at any `line-height`; live drag, autoscroll on
+both axes, double-click, Cmd+A, typing over a selection. Regression tests: `tests/ui`
+(`highlight`, `seams`, and `control` to prove the detector sees native seams).
 
-Нативная подсветка сделана прозрачной (`#editor::selection { background: transparent }`,
-текст выделения остаётся белым), под прозрачным textarea лежит `#sel-layer` с
-прямоугольниками, которые рисует `paintSelection()` в `src/app.js`. Геометрия — из
-скрытого зеркала с тем же текстом и стилями (табы, широкие символы, перенос считает
-сам движок). Правила, по которым рисует WebKit и которые повторены:
-- строка, после которой выделение продолжается (перевод строки или мягкий перенос),
-  заливается до правого края текста (`clientWidth - padding-right`, в координатах
-  контента; при Word Wrap OFF — дальше, если строка длиннее);
-- строки стыкуются без щелей и сдвинуты вверх на полумежстрочие; только самая первая
-  строка документа начинается с верха глифов;
-- края: к device-пикселям; начало/конец выделения внутри строки — на 1 device-пиксель
-  внутрь; цвет слоя `#5990fe` даёт на экране тот же цвет, что нативный `#4d90fe`
-  (WebKit его слегка сдвигает);
-- без фокуса в editor подсветки нет (как нативно); в неактивном окне остаётся синей.
+Performance: WebKit finds a position inside a text node by scanning it; on a 3.6 MB
+document one coordinate query took 3.2 ms. The mirror is split into text nodes of 256
+lines: a query takes 0.02 ms, a repaint < 1 ms. The text is copied into the mirror only
+after it changes ("input" events plus an `editor.value` setter hook).
 
-Проверка: попиксельно против нативной подсветки — 0 расхождений (Word Wrap OFF/ON,
-Menlo 19/30 и 13/21, горизонтальная прокрутка, выделение с первой строки и из середины);
-стенд швов — 0 при любых `line-height`; живые drag, автоскролл по обеим осям, двойной
-клик, Cmd+A, ввод поверх выделения.
+### How it was reproduced
 
-Производительность: WebKit ищет позицию внутри текстового узла перебором, на 3,6 МБ
-один запрос координат стоил 3,2 мс. Зеркало собрано из узлов по 256 строк — запрос
-0,02 мс, перерисовка < 1 мс. Текст в зеркало копируется только после изменений
-(событие input + перехват сеттера `editor.value`).
+Hooks run in a debug build (`LIKENOTEPAD_TEST_HOOK`, see `tests/ui/README.md`) fill the
+editor, select all, set the wrap mode and report state through the window title; the
+window alone is captured with `screencapture -l <windowID>` (it must be visible — WebKit
+does not paint an occluded window); seams are rows that are almost free of highlight
+colour between highlighted rows, searched in 120px slices (a single pixel column is not
+enough: white glyphs give false positives).
 
-## Горизонтальный drag-autoscroll
+## Horizontal drag-autoscroll
 
-Работает (коммит 70ef173). Ключ — калибровка от опорной точки клика: колонка
-фокуса = граница в зеркале одной строки, ближайшая к `mirrorX(якорь) + (x − xКлика)`.
-Внутренний отступ текста textarea (которого нет в зеркале) при этом сокращается.
-Якорь — нативная каретка сразу после mousedown (`setTimeout 0`), а не расчёт по Y:
-в самом mousedown `selectionStart` ещё старый. Проверено настоящим drag через
-CGEvent: вправо/влево/диагональ/вертикаль, табы, клик правее конца короткой строки.
+Works (70ef173). The key is calibrating against the click point: the focus column is the
+boundary in a one-line mirror closest to `mirrorX(anchor) + (x − clickX)`, so the
+textarea's inner text inset (absent from the mirror) cancels out. The anchor is the
+native caret right after mousedown (`setTimeout 0`), not a computation from Y: inside
+mousedown itself `selectionStart` is still stale. Verified with real CGEvent drags:
+right, left, diagonal, vertical, tabs, a click past the end of a short line.
 
 ## Drag-and-drop of files onto a window (Tauri `WindowEvent::DragDrop`)
 
