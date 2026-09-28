@@ -270,6 +270,7 @@ fn new_window(app: &tauri::AppHandle) {
         .resizable(true)
         .decorations(true)
         .visible(false)
+        .theme(native_theme(app))
         .build()
     {
         Ok(win) => {
@@ -303,6 +304,7 @@ fn new_standalone_window(app: &tauri::AppHandle) {
         .resizable(true)
         .decorations(true)
         .visible(false)
+        .theme(native_theme(app))
         .build()
     {
         Ok(win) => {
@@ -336,6 +338,7 @@ fn open_file_in_new_window(app: &tauri::AppHandle, path: String, content: String
         .resizable(true)
         .decorations(true)
         .visible(false)
+        .theme(native_theme(app))
         .build()
     {
         Ok(win) => {
@@ -472,7 +475,22 @@ fn get_theme(app: tauri::AppHandle) -> String {
 fn set_theme(app: tauri::AppHandle, theme: String) -> Result<(), String> {
     let mut cfg = config::load(&app);
     cfg.theme = theme;
-    config::save(&app, &cfg)
+    config::save(&app, &cfg)?;
+    let native = native_theme(&app);
+    for win in app.webview_windows().values() {
+        let _ = win.set_theme(native);
+    }
+    Ok(())
+}
+
+// The theme setting as the windows' native appearance, so the title bar (and sheets,
+// alerts) match the page: "light"/"dark" override the system, "auto" follows it.
+fn native_theme(app: &tauri::AppHandle) -> Option<tauri::Theme> {
+    match config::load(app).theme.as_str() {
+        "light" => Some(tauri::Theme::Light),
+        "dark" => Some(tauri::Theme::Dark),
+        _ => None,
+    }
 }
 
 #[derive(serde::Serialize, Clone)]
@@ -636,7 +654,8 @@ async fn open_font_panel(app: tauri::AppHandle) -> Result<(), String> {
     .inner_size(460.0, 380.0)
     .resizable(false)
     .minimizable(false)
-    .visible(false);
+    .visible(false)
+    .theme(native_theme(&app));
 
     if let Some(parent) = app.webview_windows()
         .into_iter()
@@ -675,7 +694,8 @@ fn open_settings_window(app: &tauri::AppHandle) -> tauri::Result<()> {
     .inner_size(440.0, 320.0)
     .resizable(false)
     .minimizable(false)
-    .visible(false);
+    .visible(false)
+    .theme(native_theme(app));
 
     if let Some(parent) = app.webview_windows()
         .into_iter()
@@ -1196,6 +1216,7 @@ pub fn run() {
             let handle = app.handle();
             if let Some(main) = app.get_webview_window("main") {
                 disable_tabbing(&main);
+                let _ = main.set_theme(native_theme(handle));
             }
             let mut cfg = config::load(handle);
             let saved_wrap = cfg.word_wrap;
