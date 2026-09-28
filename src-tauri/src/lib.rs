@@ -176,6 +176,22 @@ fn set_tab_title(window: tauri::Window, title: String) {
     }
 }
 
+// Proxy icon in the title bar (drag the file, Cmd-click for its folders), like
+// TextEdit: shown for a saved file, removed for an untitled document.
+#[tauri::command]
+fn set_represented_file(window: tauri::Window, path: Option<String>) {
+    if let Ok(ptr) = window.ns_window() {
+        unsafe {
+            let ns_window = &*(ptr as *const NSWindow);
+            let url: Option<Retained<AnyObject>> = path.map(|p| {
+                let ns_path = NSString::from_str(&p);
+                msg_send![class!(NSURL), fileURLWithPath: &*ns_path]
+            });
+            let _: () = msg_send![ns_window, setRepresentedURL: url.as_deref()];
+        }
+    }
+}
+
 fn set_tabbing_preferred(window: &tauri::WebviewWindow) {
     if let Ok(ptr) = window.ns_window() {
         unsafe {
@@ -1411,6 +1427,7 @@ pub fn run() {
             set_auto_name,
             set_dirty,
             set_tab_title,
+            set_represented_file,
             claim_untitled_number,
             release_untitled_number,
             confirm_close,

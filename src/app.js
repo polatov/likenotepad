@@ -35,6 +35,8 @@ window.I18N.localizeDOM();
 let currentPath = null;
 let dirty = false;
 let untitledNum = 0;
+// Path the window's title-bar proxy icon currently points to (null = none).
+let representedPath = null;
 
 function updateTitle() {
   const name = displayName();
@@ -42,6 +44,10 @@ function updateTitle() {
   document.title = title;
   getCurrentWindow().setTitle(title);
   try { invoke("set_tab_title", { title: name }); } catch (e) {}
+  if (currentPath !== representedPath) {
+    representedPath = currentPath;
+    try { invoke("set_represented_file", { path: currentPath }); } catch (e) {}
+  }
 }
 
 async function releaseUntitled() {
