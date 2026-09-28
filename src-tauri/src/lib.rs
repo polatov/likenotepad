@@ -1110,8 +1110,31 @@ fn with_test_hook(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::
     )
 }
 
+// macOS adds its own items to the Edit and View menus (AutoFill, Start Dictation, Emoji &
+// Symbols, Enter Full Screen). The menus mirror classic Notepad, so they are switched off
+// through AppKit's defaults. Registered defaults live in memory only (nothing is written
+// to the user's preferences) and must be in place before the menus are first shown.
+fn disable_system_menu_items() {
+    unsafe {
+        let dict: Retained<AnyObject> = msg_send![class!(NSMutableDictionary), dictionary];
+        for (key, value) in [
+            ("NSAutoFillSystemInsertMenuEnabled", false),
+            ("NSDisabledDictationMenuItem", true),
+            ("NSDisabledCharacterPaletteMenuItem", true),
+            ("NSFullScreenMenuItemEverywhere", false),
+        ] {
+            let k = NSString::from_str(key);
+            let v: Retained<AnyObject> = msg_send![class!(NSNumber), numberWithBool: value];
+            let _: () = msg_send![&*dict, setObject: &*v, forKey: &*k];
+        }
+        let defaults: Retained<AnyObject> = msg_send![class!(NSUserDefaults), standardUserDefaults];
+        let _: () = msg_send![&*defaults, registerDefaults: &*dict];
+    }
+}
+
 pub fn run() {
     let lang = system_lang();
+    disable_system_menu_items();
 
     let builder = tauri::Builder::default();
     #[cfg(debug_assertions)]
