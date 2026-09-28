@@ -211,6 +211,7 @@ function applyWordWrap(enabled) {
   wordWrap = enabled;
   editor.style.whiteSpace = enabled ? "pre-wrap" : "pre";
   editor.style.overflowX = enabled ? "hidden" : "auto";
+  paintSelection();
 }
 
 function applyStatusBar(visible) {
@@ -573,6 +574,208 @@ function dragAutoscrollStep() {
   dragRaf = requestAnimationFrame(dragAutoscrollStep);
 }
 
+// ---- Selection highlight painted by us ----
+// WKWebView leaves unpainted seams in a textarea's native selection highlight at its
+// 512px tile boundaries (no CSS on the textarea fixes it; see technical-lessons.md).
+// The native highlight is transparent in CSS; #sel-layer under the transparent
+// textarea gets one rectangle per visible selected row. Geometry comes from a hidden
+// mirror with the editor's text and styles, so tabs, wide glyphs and wrapping are
+// measured by the engine itself.
+const selLayer = document.getElementById("sel-layer");
+let selMirror = null;
+// The mirror's text is split into adjacent text nodes of SEL_CHUNK_LINES lines: WebKit
+// locates an offset within a text node by scanning it, so one node holding a whole big
+// file makes each position query take milliseconds. Layout is unchanged by the split.
+const SEL_CHUNK_LINES = 256;
+let selChunkNodes = [];
+let selChunkStarts = [0];
+let selTextLength = 0;
+let selMirrorKey = "";
+let selLineStarts = [0];
+let selMirrorStale = true;
+const selRange = document.createRange();
+
+// The mirror copies the text only after it changes: typing, undo/redo and execCommand
+// fire "input"; programmatic assignments to editor.value go through this setter.
+editor.addEventListener("input", () => { selMirrorStale = true; });
+{
+  const valueProp = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value");
+  Object.defineProperty(editor, "value", {
+    configurable: true,
+    get() { return valueProp.get.call(this); },
+    set(v) { valueProp.set.call(this, v); selMirrorStale = true; },
+  });
+}
+
+function syncSelMirror() {
+  const cs = getComputedStyle(editor);
+  if (!selMirror) {
+    selMirror = document.createElement("div");
+    selMirror.setAttribute("aria-hidden", "true");
+    selMirror.style.position = "absolute";
+    selMirror.style.visibility = "hidden";
+    selMirror.style.top = "0";
+    selMirror.style.left = "0";
+    selMirror.style.border = "0";
+    selMirror.style.boxSizing = "border-box";
+    // A zero-size clipping holder: the mirror is laid out and measurable, but its
+    // height (the whole document) can never make the page itself scrollable.
+    const holder = document.createElement("div");
+    holder.style.position = "absolute";
+    holder.style.top = "0";
+    holder.style.left = "0";
+    holder.style.width = "0";
+    holder.style.height = "0";
+    holder.style.overflow = "hidden";
+    holder.appendChild(selMirror);
+    document.body.appendChild(holder);
+  }
+  const key = [cs.font, cs.lineHeight, cs.whiteSpace, cs.overflowWrap, cs.tabSize, cs.letterSpacing,
+    cs.paddingTop, cs.paddingRight, cs.paddingBottom, cs.paddingLeft, editor.clientWidth].join("|");
+  if (key !== selMirrorKey) {
+    selMirrorKey = key;
+    selMirror.style.font = cs.font;
+    selMirror.style.lineHeight = cs.lineHeight;
+    selMirror.style.whiteSpace = cs.whiteSpace;
+    selMirror.style.overflowWrap = cs.overflowWrap;
+    selMirror.style.tabSize = cs.tabSize;
+    selMirror.style.letterSpacing = cs.letterSpacing;
+    selMirror.style.paddingTop = cs.paddingTop;
+    selMirror.style.paddingRight = cs.paddingRight;
+    selMirror.style.paddingBottom = cs.paddingBottom;
+    selMirror.style.paddingLeft = cs.paddingLeft;
+    selMirror.style.width = editor.clientWidth + "px";
+  }
+  if (selMirrorStale) {
+    selMirrorStale = false;
+    const val = editor.value;
+    selLineStarts = lineStartsOf(val);
+    selTextLength = val.length;
+    selChunkNodes = [];
+    selChunkStarts = [];
+    for (let i = 0; i < selLineStarts.length; i += SEL_CHUNK_LINES) {
+      const a = selLineStarts[i];
+      const b = i + SEL_CHUNK_LINES < selLineStarts.length ? selLineStarts[i + SEL_CHUNK_LINES] : val.length;
+      selChunkStarts.push(a);
+      selChunkNodes.push(document.createTextNode(val.slice(a, b)));
+    }
+    selMirror.replaceChildren(...selChunkNodes);
+  }
+}
+
+function editorCharAt(o) {
+  const [node, off] = mirrorPoint(o);
+  return node.data[off];
+}
+
+// Mirror text node and local offset for a document offset.
+function mirrorPoint(o) {
+  let lo = 0, hi = selChunkStarts.length - 1, k = 0;
+  while (lo <= hi) { const m = (lo + hi) >> 1; if (selChunkStarts[m] <= o) { k = m; lo = m + 1; } else hi = m - 1; }
+  return [selChunkNodes[k], o - selChunkStarts[k]];
+}
+
+// Client rects of mirror text [a, b).
+function mirrorRects(a, b) {
+  selRange.setStart(...mirrorPoint(a));
+  selRange.setEnd(...mirrorPoint(b));
+  return selRange.getClientRects();
+}
+
+// Caret box at offset o (its left edge and its row).
+function mirrorCaret(o) {
+  const [node, off] = mirrorPoint(o);
+  selRange.setStart(node, off);
+  selRange.setEnd(node, off);
+  return selRange.getBoundingClientRect();
+}
+
+// Box of the character at o, or the caret box when it is a newline (or the text end).
+function mirrorCharBox(o) {
+  if (o < selTextLength && editorCharAt(o) !== "\n") {
+    const r = mirrorRects(o, o + 1);
+    if (r.length) return r[0];
+  }
+  return mirrorCaret(o);
+}
+
+// Reproduces WebKit's own textarea highlight, row by row:
+// - every row the selection continues past (a newline or a soft wrap) is filled to the
+//   right edge of the text; the row where it ends stops at the selection end;
+// - rows stack without gaps, shifted up by half the leading; only the document's
+//   first row starts at the glyph top (it has no row above to join).
+function paintSelection() {
+  const s = editor.selectionStart, e = editor.selectionEnd;
+  // Like the native highlight: nothing when the editor is not focused.
+  if (s === e || document.activeElement !== editor) {
+    if (selLayer.firstChild) selLayer.replaceChildren();
+    return;
+  }
+  syncSelMirror();
+  const cs = getComputedStyle(editor);
+  const padT = parseFloat(cs.paddingTop) || 0;
+  const padL = parseFloat(cs.paddingLeft) || 0;
+  const padR = parseFloat(cs.paddingRight) || 0;
+  const lineH = parseFloat(cs.lineHeight) || parseFloat(cs.fontSize) * 1.2;
+  const viewW = editor.clientWidth, viewH = editor.clientHeight;
+  selLayer.style.left = editor.offsetLeft + "px";
+  selLayer.style.top = editor.offsetTop + "px";
+  selLayer.style.width = viewW + "px";
+  selLayer.style.height = viewH + "px";
+
+  const base = selMirror.getBoundingClientRect();
+  const rowOf = (r) => Math.floor((r.top + r.height / 2 - base.top - padT) / lineH);
+  const lastChar = editorCharAt(e - 1);
+
+  const startBox = mirrorCharBox(s);
+  const rowS = rowOf(startBox), xS = startBox.left - base.left;
+  let rowE, xE, fullEnd;
+  if (lastChar === "\n") {
+    // The selection ends right after a newline: that line is filled to the edge.
+    rowE = rowOf(mirrorCaret(e - 1)); xE = 0; fullEnd = true;
+  } else {
+    const r = mirrorRects(e - 1, e)[0] || mirrorCaret(e);
+    rowE = rowOf(r); xE = r.right - base.left; fullEnd = false;
+  }
+  const glyphH = startBox.height > 0 && startBox.height < lineH ? startBox.height : parseFloat(cs.fontSize) * 1.17;
+  const halfLead = (lineH - glyphH) / 2;
+  // Full rows end at the right edge of the text area, or further when a line (Word
+  // Wrap off: one row per line) is longer than that.
+  const edge = viewW - padR;
+  const noWrap = cs.whiteSpace === "pre";
+  const rowRight = (row) => {
+    if (!noWrap || row + 1 >= selLineStarts.length) return edge;
+    return Math.max(edge, mirrorCaret(selLineStarts[row + 1] - 1).left - base.left);
+  };
+  // Snap to device pixels, as WebKit does: no half-covered edge pixels.
+  const dpr = window.devicePixelRatio || 1;
+  const sl = editor.scrollLeft, st = editor.scrollTop;
+
+  const firstRow = Math.max(rowS, Math.floor((st - padT) / lineH) - 1);
+  const lastRow = Math.min(rowE, Math.ceil((st + viewH - padT) / lineH) + 1);
+  const boxes = [];
+  for (let row = firstRow; row <= lastRow; row++) {
+    // WebKit also keeps the selection's own start and end one device pixel inside the glyphs.
+    const x0 = row === rowS ? Math.ceil(xS * dpr) / dpr + 1 / dpr : padL;
+    const x1 = row === rowE && !fullEnd ? Math.floor(xE * dpr) / dpr - 1 / dpr : Math.floor(rowRight(row) * dpr) / dpr;
+    if (x1 <= x0) continue;
+    const rowTop = padT + row * lineH;
+    const y0 = row === 0 ? rowTop + halfLead : rowTop - halfLead;
+    const y1 = rowTop + lineH - halfLead;
+    // Edges on device pixels, rounded the same way for both neighbours, so that
+    // adjacent rows share one edge and no half-covered hairline shows between them.
+    const top = Math.round((y0 - st) * dpr) / dpr, bottom = Math.round((y1 - st) * dpr) / dpr;
+    boxes.push([x0 - sl, top, x1 - x0, bottom - top]);
+  }
+  const kids = selLayer.children;
+  while (kids.length > boxes.length) selLayer.lastChild.remove();
+  while (kids.length < boxes.length) selLayer.appendChild(document.createElement("div"));
+  boxes.forEach(([x, y, w, h], i) => {
+    const bs = kids[i].style;
+    bs.left = x + "px"; bs.top = y + "px"; bs.width = w + "px"; bs.height = h + "px";
+  });
+}
+
 function doReplace() {
   const term = findInput.value;
   const replacement = document.getElementById("replace-input").value;
@@ -756,16 +959,15 @@ async function init() {
   });
   document.getElementById("goto-close").addEventListener("click", closeGoto);
   document.addEventListener("selectionchange", () => {
+    paintSelection();
     if (document.activeElement !== editor) return;
     updatePos();
-    // Forced repaint: WebKit leaves an unpainted seam at the boundaries of its internal
-    // text tiles in a textarea during selection (translateZ/will-change do not help).
-    // Nudging scrollTop forth and back forces WebKit to repaint
-    // the whole visible area. See technical-lessons.md.
-    const st = editor.scrollTop;
-    editor.scrollTop = st + 1;
-    editor.scrollTop = st;
   });
+  editor.addEventListener("scroll", paintSelection);
+  editor.addEventListener("focus", paintSelection);
+  editor.addEventListener("blur", paintSelection);
+  // Font, wrap and window size changes all resize or reflow the editor.
+  new ResizeObserver(paintSelection).observe(editor);
   try {
     console.log("[lang]", lang, navigator.language);
     try {
@@ -806,6 +1008,7 @@ async function init() {
         editor.style.fontWeight = fontWeight;
         editor.style.fontStyle = fontStyle;
         editor.style.lineHeight = `${Math.round(fontSize * 1.6)}px`;
+        paintSelection();
       } catch (e) {
         console.error("get_font:", e);
       }
@@ -852,6 +1055,7 @@ async function init() {
       editor.style.fontWeight = weight;
       editor.style.fontStyle = style;
       editor.style.lineHeight = `${Math.round(size * 1.6)}px`;
+      paintSelection();
     });
     await getCurrentWindow().listen("menu-page-setup", async () => {
       await invoke("page_setup");

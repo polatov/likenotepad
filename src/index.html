@@ -72,7 +72,9 @@
     border: none;
     outline: none;
     resize: none;
-    background: var(--editor-bg);
+    position: relative;
+    z-index: 1;
+    background: transparent;
     color: var(--text);
     font-family: "Menlo", "Monaco", "Courier New", monospace;
     font-size: 13px;
@@ -83,8 +85,11 @@
     overflow-x: auto;
   }
 
+  /* The native highlight is transparent: WKWebView leaves unpainted seams in it at
+     its 512px tile boundaries. #sel-layer (under the transparent textarea) paints the
+     highlight instead; see paintSelection() in app.js and technical-lessons.md. */
   #editor::selection {
-    background: #4d90fe;
+    background: transparent;
     color: #ffffff;
   }
 
@@ -92,6 +97,19 @@
     position: relative;
     flex: 1;
     display: flex;
+    background: var(--editor-bg);
+  }
+
+  #sel-layer {
+    position: absolute;
+    overflow: hidden;
+    pointer-events: none;
+    z-index: 0;
+  }
+  #sel-layer div {
+    position: absolute;
+    /* WebKit shifts the native ::selection #4d90fe slightly; this matches it on screen. */
+    background: #5990fe;
   }
 
   #findbar {
@@ -490,6 +508,7 @@
   <button id="goto-close" title="Close" data-i18n-title="close">✕</button>
 </div>
 <div id="editor-wrap">
+  <div id="sel-layer" aria-hidden="true"></div>
   <textarea id="editor" spellcheck="false" autocomplete="off" autocorrect="off" autocapitalize="off"></textarea>
 </div>
 <div id="ctx-menu" hidden>
