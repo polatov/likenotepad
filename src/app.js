@@ -1231,3 +1231,9 @@ document.addEventListener("mousedown", (e) => {
   if (!ctxMenu.hidden && !ctxMenu.contains(e.target)) hideCtxMenu();
 });
 
+
+// UI tests (tests/ui): a debug build started with LIKENOTEPAD_TEST_HOOK sets this flag
+// before the page loads; the test hooks drive these internals.
+if (window.__LIKENOTEPAD_TEST__) {
+  window.__likeNotepad = { applyWordWrap, paintSelection };
+}

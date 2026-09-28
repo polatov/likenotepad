@@ -35,6 +35,11 @@ npm run build    # build LikeNotepad.exe.app and a .dmg into src-tauri/target/re
 The frontend in `src/` is plain HTML/JS with no build step, so the app can also be
 run without Node: `cd src-tauri && cargo run`.
 
+## Tests
+
+`tests/ui/run.sh` runs end-to-end UI checks of the selection highlight and
+drag-autoscroll against the real app; see [tests/ui/README.md](tests/ui/README.md).
+
 ## Project layout
 
 | Path | What it is |
@@ -45,4 +50,5 @@ run without Node: `cd src-tauri && cargo run`.
 | `src-tauri/src/lib.rs` | Native side: menus, windows and tabs, file I/O, alerts, printing |
 | `src-tauri/src/i18n.rs` | Strings for native menus and alerts (mirrors `src/i18n.js`) |
 | `src-tauri/src/config.rs` | Persistent settings |
+| `tests/ui/` | End-to-end UI tests |
 | `technical-lessons.md` | Notes on WebKit quirks found while building this (in Russian) |

@@ -11,3 +11,6 @@ src-tauri/gen/
 # Логи
 *.log
 .claude/
+
+# UI test build output
+tests/ui/.build/

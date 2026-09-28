@@ -1095,10 +1095,29 @@ fn rebuild_recent_menu(app: &tauri::AppHandle) {
     let _ = submenu.append(&clear);
 }
 
+// UI tests (tests/ui): in debug builds only, LIKENOTEPAD_TEST_HOOK names a JS file that
+// runs in every webview before the page's own scripts, with __LIKENOTEPAD_TEST__ set so
+// app.js exposes the few internals the tests drive. Release builds never read it.
+#[cfg(debug_assertions)]
+fn with_test_hook(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::Wry> {
+    let Ok(path) = std::env::var("LIKENOTEPAD_TEST_HOOK") else { return builder };
+    let hook = std::fs::read_to_string(&path)
+        .unwrap_or_else(|e| panic!("LIKENOTEPAD_TEST_HOOK {path}: {e}"));
+    builder.plugin(
+        tauri::plugin::Builder::<tauri::Wry>::new("test-hook")
+            .js_init_script(format!("window.__LIKENOTEPAD_TEST__ = true;\n{hook}"))
+            .build(),
+    )
+}
+
 pub fn run() {
     let lang = system_lang();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default();
+    #[cfg(debug_assertions)]
+    let builder = with_test_hook(builder);
+
+    builder
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
