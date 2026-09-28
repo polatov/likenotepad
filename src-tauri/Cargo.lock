@@ -1952,6 +1952,7 @@ dependencies = [
 name = "notepad-mac"
 version = "0.1.0"
 dependencies = [
+ "block2",
  "encoding_rs",
  "objc2",
  "objc2-app-kit",

@@ -16,6 +16,8 @@ pub struct Config {
     pub use_tabs: bool,
     pub show_counter: bool,
     pub auto_name: bool,
+    /// The one-time "open .txt with LikeNotepad.exe" request was made.
+    pub default_txt_asked: bool,
 }
 
 impl Default for Config {
@@ -33,6 +35,7 @@ impl Default for Config {
             use_tabs: false,
             show_counter: false,
             auto_name: false,
+            default_txt_asked: false,
         }
     }
 }

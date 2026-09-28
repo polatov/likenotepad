@@ -9,7 +9,9 @@ use tauri::{
 use tauri_plugin_dialog::{DialogExt, FilePath};
 use objc2::define_class;
 use objc2::rc::{autoreleasepool, Retained};
-use objc2::runtime::NSObject;
+use objc2::runtime::{AnyClass, AnyObject, NSObject};
+use objc2::{class, msg_send, sel};
+use block2::Block;
 use objc2::{AnyThread, ClassType, MainThreadMarker, MainThreadOnly};
 use std::sync::OnceLock;
 use objc2_app_kit::{NSAlert, NSAlertStyle, NSApplication, NSFont, NSFontManager, NSPageLayout, NSPrintOperation, NSTextView, NSWindow, NSWindowTabbingMode, NSWindowOrderingMode};
@@ -102,6 +104,55 @@ fn show_close_alert(name: &str, lang: &str) -> isize {
         let response = alert.runModal();
         response - 1000
     })
+}
+
+// ---- One-time offer to open .txt files with LikeNotepad.exe ----
+// No alert of our own: macOS itself asks "Open .txt with LikeNotepad.exe or keep
+// <current app>?" when an app requests to become the default for a type another
+// app owns. Asked once per install, only from a real .app bundle (a dev binary
+// would register itself).
+
+#[link(name = "UniformTypeIdentifiers", kind = "framework")]
+extern "C" {}
+
+fn offer_default_for_txt(app: &AppHandle) {
+    let mut cfg = config::load(app);
+    if cfg.default_txt_asked { return; }
+    autoreleasepool(|_| unsafe {
+        let bundle: Retained<AnyObject> = msg_send![class!(NSBundle), mainBundle];
+        let app_url: Retained<AnyObject> = msg_send![&*bundle, bundleURL];
+        let app_path: Retained<NSString> = msg_send![&*app_url, path];
+        let app_path = app_path.to_string();
+        if !app_path.ends_with(".app") { return; }
+        let ws: Retained<AnyObject> = msg_send![class!(NSWorkspace), sharedWorkspace];
+        let supported: bool = msg_send![
+            &*ws,
+            respondsToSelector: sel!(setDefaultApplicationAtURL:toOpenContentType:completionHandler:)
+        ];
+        let Some(ut_class) = AnyClass::get(c"UTType") else { return };
+        if !supported { return; }
+
+        cfg.default_txt_asked = true;
+        let _ = config::save(app, &cfg);
+
+        let ext = NSString::from_str("txt");
+        let ty: Option<Retained<AnyObject>> = msg_send![ut_class, typeWithFilenameExtension: &*ext];
+        let Some(ty) = ty else { return };
+        let handler: Option<Retained<AnyObject>> = msg_send![&*ws, URLForApplicationToOpenContentType: &*ty];
+        let handler_path = handler.and_then(|url| {
+            let p: Option<Retained<NSString>> = msg_send![&*url, path];
+            p.map(|p| p.to_string())
+        });
+        if handler_path.as_deref() == Some(app_path.as_str()) { return; }
+
+        let no_handler: Option<&Block<dyn Fn(*mut AnyObject)>> = None;
+        let _: () = msg_send![
+            &*ws,
+            setDefaultApplicationAtURL: &*app_url,
+            toOpenContentType: &*ty,
+            completionHandler: no_handler
+        ];
+    });
 }
 
 fn disable_tabbing(window: &tauri::WebviewWindow) {
@@ -1372,9 +1423,17 @@ pub fn run() {
         ])
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
-        .run(|app_handle, event| {
-            if let tauri::RunEvent::Opened { urls } = event {
-                handle_opened_urls(app_handle, urls);
+        .run(|app_handle, event| match event {
+            tauri::RunEvent::Opened { urls } => handle_opened_urls(app_handle, urls),
+            tauri::RunEvent::Ready => {
+                // Let the first window appear before the alert.
+                let handle = app_handle.clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    let h = handle.clone();
+                    let _ = handle.run_on_main_thread(move || offer_default_for_txt(&h));
+                });
             }
+            _ => {}
         });
 }

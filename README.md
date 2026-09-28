@@ -17,6 +17,7 @@ printing via AppKit) around a single `<textarea>` in WKWebView.
 - Page Setup and Print
 - Opens files that are not valid UTF-8 as Windows-1251
 - Registers as an editor for `txt`, `log`, `md`, `csv`, `json`, `xml`, `ini`, `conf`, `cfg`, `yaml`
+- On first launch, asks macOS once to make it the default app for `.txt` (the system shows its own confirmation)
 - UI in 8 languages: English, Russian, Spanish, German, French, Portuguese (Brazil),
   Chinese (Simplified), Japanese — picked from the system language
 
