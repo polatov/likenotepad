@@ -3,7 +3,7 @@ mod i18n;
 
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use tauri::{
-    menu::{AboutMetadata, CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID},
+    menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu, HELP_SUBMENU_ID},
     AppHandle, Emitter, Manager,
 };
 use tauri_plugin_dialog::{DialogExt, FilePath};
@@ -1110,6 +1110,45 @@ fn with_test_hook(builder: tauri::Builder<tauri::Wry>) -> tauri::Builder<tauri::
     )
 }
 
+const PROJECT_PAGE_URL: &str = "https://polatov.me/notepad/";
+const PROJECT_PAGE_LABEL: &str = "polatov.me/notepad";
+
+// The standard macOS About panel with the description followed by a link to the project
+// page (credits as an attributed string; the panel's text view opens links on click).
+fn show_about_panel(app: &AppHandle, lang: &str) {
+    let version = app.package_info().version.to_string();
+    autoreleasepool(|_| unsafe {
+        let Some(mtm) = MainThreadMarker::new() else { return };
+        let text = format!("{}\n\n{}", i18n::mt(lang, "about_comments"), PROJECT_PAGE_LABEL);
+        let ns_text = NSString::from_str(&text);
+        let credits = NSMutableAttributedString::initWithAttributedString(
+            NSMutableAttributedString::alloc(),
+            &NSAttributedString::from_nsstring(&ns_text),
+        );
+        let all = objc2_foundation::NSRange::new(0, ns_text.length());
+        let font = NSFont::systemFontOfSize(NSFont::systemFontSize());
+        credits.addAttribute_value_range(&NSString::from_str("NSFont"), font.as_ref(), all);
+        let color: Retained<AnyObject> = msg_send![class!(NSColor), labelColor];
+        credits.addAttribute_value_range(&NSString::from_str("NSColor"), &color, all);
+        let url: Retained<AnyObject> = msg_send![class!(NSURL), URLWithString: &*NSString::from_str(PROJECT_PAGE_URL)];
+        let label_len = NSString::from_str(PROJECT_PAGE_LABEL).length();
+        let link = objc2_foundation::NSRange::new(ns_text.length() - label_len, label_len);
+        credits.addAttribute_value_range(&NSString::from_str("NSLink"), &url, link);
+
+        let options: Retained<AnyObject> = msg_send![class!(NSMutableDictionary), dictionary];
+        let set = |key: &str, value: &AnyObject| {
+            let _: () = msg_send![&*options, setObject: value, forKey: &*NSString::from_str(key)];
+        };
+        set("ApplicationName", &NSString::from_str("LikeNotepad.exe"));
+        set("ApplicationVersion", &NSString::from_str(&version));
+        set("Version", &NSString::from_str(&version));
+        set("Copyright", &NSString::from_str("Timur Polatov"));
+        set("Credits", &credits);
+        let ns_app = NSApplication::sharedApplication(mtm);
+        let _: () = msg_send![&*ns_app, orderFrontStandardAboutPanelWithOptions: &*options];
+    });
+}
+
 // macOS adds its own items to the Edit and View menus (AutoFill, Start Dictation, Emoji &
 // Symbols, Enter Full Screen). The menus mirror classic Notepad, so they are switched off
 // through AppKit's defaults. Registered defaults live in memory only (nothing is written
@@ -1167,18 +1206,9 @@ pub fn run() {
 
             // Build native menu
             let about_label = i18n::mt(lang, "about");
-            let comments = i18n::mt(lang, "about_comments");
-            let about_item = PredefinedMenuItem::about(handle, Some(about_label), Some(AboutMetadata {
-                name:          Some("LikeNotepad.exe".to_string()),
-                version:       Some("0.1.0".to_string()),
-                authors:       Some(vec!["Timur Polatov".to_string()]),
-                copyright:     Some("Timur Polatov".to_string()),
-                website:       Some("https://polatov.me".to_string()),
-                website_label: Some("https://polatov.me".to_string()),
-                comments:      Some(comments.to_string()),
-                credits:       Some(comments.to_string()),
-                ..Default::default()
-            }))?;
+            // Our own item rather than PredefinedMenuItem::about: on macOS the latter drops
+            // the website field, and the About panel should link to the project page.
+            let about_item = MenuItem::with_id(handle, "about", about_label, true, None::<&str>)?;
             let sep_app = PredefinedMenuItem::separator(handle)?;
             let quit_label = i18n::mt(lang, "quit");
             let quit_item = MenuItem::with_id(handle, "quit", quit_label, true, Some("CmdOrCtrl+Q"))?;
@@ -1285,6 +1315,7 @@ pub fn run() {
             // Handle menu events
             app.on_menu_event(move |app, event| {
                 match event.id().as_ref() {
+                    "about" => show_about_panel(app, lang),
                     "quit" => {
                         let dirty_labels: Vec<String> = {
                             let dirty = app.state::<DirtyState>();
