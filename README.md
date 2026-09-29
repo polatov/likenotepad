@@ -44,6 +44,11 @@ Developed and tested on macOS 27; built for macOS 10.15 and later.
 - UI in 8 languages: English, Russian, Spanish, German, French, Portuguese (Brazil),
   Chinese (Simplified), Japanese — picked from the system language
 
+<p>
+  <img src="docs/screenshots/settings.png" alt="Settings window" width="49%">
+  <img src="docs/screenshots/font.png" alt="Font window" width="49%">
+</p>
+
 ## Building
 
 Requirements: macOS, [Rust](https://rustup.rs/) (stable), Node.js with npm.
