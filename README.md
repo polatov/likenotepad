@@ -6,7 +6,7 @@ A small plain-text editor for macOS in the spirit of Windows Notepad, built with
 [Tauri 2](https://tauri.app/): a native Rust shell (menus, alerts, file dialogs,
 printing via AppKit) around a single `<textarea>` in WKWebView.
 
-![LikeNotepad.exe](docs/project-page/notepad-light.png)
+![LikeNotepad.exe](docs/screenshots/editor.png)
 
 ## Install
 
