@@ -46,7 +46,7 @@ new bundle in, `lsregister -f` it, launch it.
 
 ## GitHub
 
-- Private repo https://github.com/polatov/likenotepad (branch `master`); `gh` 2.101 lives in
+- Public repo https://github.com/polatov/likenotepad (branch `master`); `gh` 2.101 lives in
   `~/.local/bin`, logged in as `polatov`.
 - Use `/usr/bin/git` for anything that talks to GitHub: the first `git` in PATH
   (`/usr/local/bin`, Intel Homebrew) cannot run on this Mac, and `gh` subcommands that shell
@@ -73,10 +73,14 @@ new bundle in, `lsregister -f` it, launch it.
   UI tests, new app icon (source: Claude Design canvas "LikeNotepad.exe Icon"), proxy icon,
   one-time `.txt` default-app offer, About panel link to https://polatov.me/notepad/,
   title bar follows the theme.
-- Released 1.0.0 (tag `v1.0.0`): pushing a `v*` tag makes `.github/workflows/build-dmg.yml`
-  build an unsigned universal `.dmg` as a run artifact (no GitHub Release is published).
+- Released 1.0.0 (tag `v1.0.0`), public repo, MIT. Pushing a `v*` tag makes
+  `.github/workflows/build-dmg.yml` build the unsigned universal `.dmg` and publish a GitHub
+  Release with it. The Homebrew tap https://github.com/polatov/homebrew-tap
+  (`brew install --cask polatov/tap/likenotepad`, local clone `../homebrew-tap`) picks the
+  new release up by itself within a day (`update.yml`; run it by hand to hurry) and
+  `test.yml` installs it on a clean macOS runner.
   To release: bump the version in `package.json`, `package-lock.json`,
   `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (`cargo check` updates `Cargo.lock`),
-  commit, tag, push the tag.
+  commit, tag, push the tag; then check the release and the tap's test run.
 - Open: nothing planned; Apple Developer ID signing is out of scope for now.
 - Project page for the blog: `docs/project-page/` (handled in a separate chat).
