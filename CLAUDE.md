@@ -67,12 +67,16 @@ new bundle in, `lsregister -f` it, launch it.
 - Code comments and docs in English; UI strings live in `src/i18n.js` and
   `src-tauri/src/i18n.rs` (8 languages, keep them in sync).
 
-## State (2026-09-28)
+## State (2026-09-29)
 
 - Done: horizontal/vertical drag-autoscroll, self-painted selection highlight (no seams),
   UI tests, new app icon (source: Claude Design canvas "LikeNotepad.exe Icon"), proxy icon,
   one-time `.txt` default-app offer, About panel link to https://polatov.me/notepad/,
   title bar follows the theme.
-- Open: the `.dmg` workflow's first run, version 1.0.0, parity check against Windows Notepad. Apple Developer ID signing is out
-  of scope for now.
+- Released 1.0.0 (tag `v1.0.0`): pushing a `v*` tag makes `.github/workflows/build-dmg.yml`
+  build an unsigned universal `.dmg` as a run artifact (no GitHub Release is published).
+  To release: bump the version in `package.json`, `package-lock.json`,
+  `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` (`cargo check` updates `Cargo.lock`),
+  commit, tag, push the tag.
+- Open: nothing planned; Apple Developer ID signing is out of scope for now.
 - Project page for the blog: `docs/project-page/` (handled in a separate chat).
