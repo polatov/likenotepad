@@ -8,6 +8,10 @@ on:
     tags: ["v*"]
   workflow_dispatch:
 
+# Reads the repository only; the .dmg leaves as a run artifact.
+permissions:
+  contents: read
+
 jobs:
   build:
     runs-on: macos-latest
